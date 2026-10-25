@@ -1,0 +1,14 @@
+{
+  "name": "@atlas/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo": "node --no-warnings --import tsx src/demo.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test": "echo 'no tests'"
+  },
+  "dependencies": { "@atlas/core": "workspace:*", "@atlas/api": "workspace:*" },
+  "devDependencies": { "@types/node": "^22.10.0", "tsx": "^4.19.0", "typescript": "^5.7.0" }
+}
