@@ -5,7 +5,7 @@ import { usePoll } from "./hooks";
 import { BottomTabs, JarvisMark, SideRail, TABS, type Tab } from "./components/Nav";
 import { Overview } from "./screens/Overview";
 import { Approvals } from "./screens/Approvals";
-import { Pipeline } from "./screens/Pipeline";
+import { Acquisition } from "./screens/Acquisition";
 import { BoxSafe } from "./screens/BoxSafe";
 import { Finance } from "./screens/Finance";
 import { OwnerLogin } from "./components/OwnerLogin";
@@ -140,7 +140,7 @@ function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass }
         )}
         {tab === "overview" && <Overview status={status.data} approvalCount={pendingApprovals.data?.length ?? null} onNavigate={navigate} onDataChanged={onDataChanged} />}
         {tab === "approvals" && <Approvals onDataChanged={onDataChanged} />}
-        {tab === "pipeline" && <Pipeline />}
+        {tab === "pipeline" && <Acquisition onDataChanged={onDataChanged} />}
         {tab === "boxsafe" && <BoxSafe />}
         {tab === "finance" && <Finance />}
         {tab === "devices" && <Devices />}

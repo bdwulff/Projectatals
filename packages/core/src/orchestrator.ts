@@ -99,16 +99,17 @@ export interface IntentParser {
 /** Deterministic parser. A Claude-backed parser can replace it behind the same interface. */
 export class RuleIntentParser implements IntentParser {
   async parse(raw: string): Promise<Intent> {
-    const t = raw.trim().toLowerCase().replace(/^(hey |ok |okay )?atlas[,.]?\s*/, "");
+    const cleaned = raw.trim().replace(/^(?:(?:hey|ok|okay)\s+)?(?:atlas|jarvis)\b[,.]?\s*/i, "");
+    const t = cleaned.toLowerCase();
     const range = (/\bweek\b/.test(t) ? "week" : /\bmonth\b/.test(t) ? "month" : "today") as "today" | "week" | "month";
     if (/(morning|briefing|what'?s happening|what is happening|across my businesses|run wulff)/.test(t) && !/boxsafe order/.test(t)) return { kind: "briefing" };
-    if (/status|connected|online/.test(t) && /atlas|system|connection/.test(t)) return { kind: "status" };
+    if (/status|connected|online/.test(t) && (/atlas|jarvis|system|connection/.test(t) || /^(?:status|are you (?:online|connected)|what'?s your status)\??$/.test(t))) return { kind: "status" };
     if (/(merch|merchandise).*(post|ship|dispatch)|need.*(posting|dispatch|shipping)/.test(t)) return { kind: "boxsafe.dispatch" };
     if (/(stripe|payments).*(against|reconcile|check|match)|reconcile/.test(t)) return { kind: "boxsafe.reconcile", range };
     if (/how much.*(boxsafe|received|made|money)|boxsafe.*(revenue|received|made)/.test(t)) return { kind: "boxsafe.revenue", range };
     if (/boxsafe.*(order|report)|orders.*boxsafe/.test(t)) return { kind: "boxsafe.orders", range };
     if (/^(call me|test (my |the )?(phone|call))\b/.test(t)) return { kind: "owner.test_call" };
-    if (/^(look up|search for|research)\s+/.test(t)) return { kind: "research.lookup", query: raw.replace(/^(?:(?:hey |ok |okay )?atlas[,.]?\s*)?(?:look up|search for|research)\s+/i, "").trim() };
+    if (/^(look up|search for|research)\s+/.test(t)) return { kind: "research.lookup", query: cleaned.replace(/^(?:look up|search for|research)\s+/i, "").trim() };
     if (/find .*(business|lead|prospect|client)/.test(t)) {
       const count = Number(/(\d+|five|five|three|ten)/.exec(t)?.[1]?.replace("five", "5").replace("three", "3").replace("ten", "10") ?? 5) || 5;
       const area = /(?:around|in|near) ([a-z ]+?)(?: that| who| with|$)/.exec(t)?.[1]?.trim() ?? "Officer, Berwick, Pakenham, Cranbourne, Dandenong";
@@ -185,8 +186,8 @@ export class Atlas {
   }
 
   // ───────────────────────── Wulff Studio: research ─────────────────────────
-  async researchProspects(input: { area: string; count: number }): Promise<Prospect[]> {
-    const candidates = await this.deps.research.find({ area: input.area, count: input.count });
+  async researchProspects(input: { area: string; count: number; industries?: string[] }): Promise<Prospect[]> {
+    const candidates = await this.deps.research.find({ area: input.area, count: input.count, industries: input.industries });
     const out: Prospect[] = [];
     for (const c of candidates) {
       const evidence: Evidence[] = [];

@@ -41,14 +41,14 @@ export function createBackgroundWorker(rt: Runtime, env: NodeJS.ProcessEnv = pro
   function researchGate(): BackgroundTaskState | null {
     if (env.ATLAS_RESEARCH_ENABLED !== "true") return { state: "skipped", detail: "Automatic research is disabled." };
     if (env.ATLAS_MODE !== "live" || rt.mode !== "live") return { state: "skipped", detail: "Automatic research runs only in explicit live mode; fictional mode never searches automatically." };
-    if (!env.BRAVE_SEARCH_API_KEY?.trim()) return { state: "blocked", detail: "BRAVE_SEARCH_API_KEY is missing. Live research is unavailable; no fictional data is substituted." };
+    if (env.ATLAS_RESEARCH_PROVIDER !== "tavily" && !env.BRAVE_SEARCH_API_KEY?.trim()) return { state: "blocked", detail: "Choose free Tavily research or configure BRAVE_SEARCH_API_KEY. No fictional data is substituted." };
     return null;
   }
 
   function scope(): { area: string; count: number; scopeHash: string } {
     const area = (env.ATLAS_RESEARCH_AREA?.trim() || DEFAULT_AREA).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").slice(0, 160);
     const raw = Number(env.ATLAS_RESEARCH_COUNT ?? 5);
-    const count = Number.isFinite(raw) ? Math.min(10, Math.max(1, Math.floor(raw))) : 5;
+    const count = Number.isFinite(raw) ? Math.min(env.ATLAS_RESEARCH_PROVIDER === "tavily" ? 5 : 10, Math.max(1, Math.floor(raw))) : 5;
     const scopeHash = createHash("sha256").update(JSON.stringify({ area: area.toLowerCase(), count })).digest("hex").slice(0, 24);
     return { area, count, scopeHash };
   }
@@ -63,7 +63,9 @@ export function createBackgroundWorker(rt: Runtime, env: NodeJS.ProcessEnv = pro
     const at = clock().toISOString();
     store.setMemory("background.research.lastRun", { state: "running", startedAt: at, day: payload.day, jobId: job.id, area: payload.area, count: payload.count });
     try {
-      const prospects = await rt.atlas.researchProspects({ area: payload.area, count: payload.count });
+      const prospects = env.ATLAS_RESEARCH_PROVIDER === "tavily"
+        ? (await rt.acquisition.discover({ area: payload.area, count: payload.count })).map(record => rt.atlas.prospects.require(record.prospectId))
+        : await rt.atlas.researchProspects({ area: payload.area, count: payload.count });
       if (prospects.some((p) => p.fixture)) throw new Error("Fictional data was returned in live research.");
       const result = { candidateCount: prospects.length, qualifiedCount: prospects.filter((p) => p.qualification === "qualified").length, day: payload.day };
       store.setMemory("background.research.lastRun", { state: "completed", startedAt: at, finishedAt: clock().toISOString(), jobId: job.id, area: payload.area, ...result });

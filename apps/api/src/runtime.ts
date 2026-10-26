@@ -3,7 +3,8 @@
  * credentials exist; missing live connections remain unavailable, never fictional.
  * ATLAS_MODE=fake forces fakes everywhere (default for local development).
  */
-import { Atlas, SqliteStore, fake, live, BraveResearchSource, type AtlasDeps, type ProspectCandidate } from "@atlas/core";
+import { AcquisitionService, Atlas, SqliteStore, fake, live, BraveResearchSource, TavilyResearchSource, type AcquisitionMailTransport, type AtlasDeps, type ProspectCandidate } from "@atlas/core";
+import { GmailAcquisitionMailTransport, ResendAcquisitionMailTransport } from "./acquisition-mail.js";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -29,7 +30,7 @@ export function fixtureWebsiteTable() {
   };
 }
 
-export interface Runtime { atlas: Atlas; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
+export interface Runtime { atlas: Atlas; acquisition: AcquisitionService; googleMail: GmailAcquisitionMailTransport; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
 
 export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   const requestedMode = env.ATLAS_MODE ?? "fake";
@@ -43,7 +44,8 @@ export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   const liveStripe = new live.StripeRestGateway(env.STRIPE_RESTRICTED_KEY);
   const liveMailer = new live.ResendMailer(env.RESEND_API_KEY, (env.ATLAS_ALLOWED_FROM ?? "").split(",").filter(Boolean));
   const liveTel = new live.VerifiedTwilioTelephony({ sid: env.TWILIO_ACCOUNT_SID, token: env.TWILIO_AUTH_TOKEN, from: env.TWILIO_FROM_NUMBER, ownerNumber: env.ATLAS_OWNER_PHONE, enabled: env.ATLAS_OWNER_CALLS_ENABLED === "true", store, maxCallsPerDay: Number(env.ATLAS_OWNER_CALLS_PER_DAY ?? 1) });
-  const research = new BraveResearchSource({ apiKey: env.BRAVE_SEARCH_API_KEY ?? "" });
+  const useBrave = env.ATLAS_RESEARCH_PROVIDER === "brave" || (env.ATLAS_RESEARCH_PROVIDER !== "tavily" && Boolean(env.BRAVE_SEARCH_API_KEY?.trim()));
+  const research = useBrave ? new BraveResearchSource({ apiKey: env.BRAVE_SEARCH_API_KEY }) : new TavilyResearchSource({ apiKey: env.TAVILY_API_KEY, excludeDomains: () => store.listDocs<{ website: string | null }>("prospects").flatMap(row => { try { return row.doc.website ? [new URL(row.doc.website).hostname] : []; } catch { return []; } }) });
   const deps: AtlasDeps = {
     store,
     mailer: forceFake ? fakes.mailer : liveMailer,
@@ -66,5 +68,10 @@ export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
       gstRegistered: env.ATLAS_GST_REGISTERED === "true",
     },
   };
-  return { atlas: new Atlas(deps), mode: forceFake ? "fake" : "live", fakes };
+  const atlas = new Atlas(deps);
+  const googleMail = new GmailAcquisitionMailTransport({ clientId: forceFake ? undefined : env.GOOGLE_CLIENT_ID, clientSecret: forceFake ? undefined : env.GOOGLE_CLIENT_SECRET, publicOrigin: env.ATLAS_PUBLIC_ORIGIN, ownerAccessKey: env.ATLAS_OWNER_ACCESS_KEY, store });
+  const fictionalMailer: AcquisitionMailTransport = { status: async () => ({ state: "fake", provider: "Fictional mailer", detail: "Fictional mode records test emails locally; no provider is contacted.", sender: "hello@wulffstudio.example.test" }), send: input => fakes.mailer.send(input) };
+  const acquisitionMailer = forceFake ? fictionalMailer : env.RESEND_API_KEY?.trim() ? new ResendAcquisitionMailTransport({ apiKey: env.RESEND_API_KEY, fromAddress: env.ATLAS_OUTREACH_FROM, store }) : googleMail;
+  const acquisition = new AcquisitionService(atlas, { mode: forceFake ? "fake" : "live", publicOrigin: env.ATLAS_PUBLIC_ORIGIN, mailer: acquisitionMailer, fromAddress: env.ATLAS_OUTREACH_FROM ?? "", senderName: env.ATLAS_OUTREACH_SENDER_NAME ?? "Brandon Wulff", organisation: "Wulff Studio", contactDetails: env.ATLAS_OUTREACH_CONTACT, maxSendsPerDay: 5 });
+  return { atlas, acquisition, googleMail, mode: forceFake ? "fake" : "live", fakes };
 }

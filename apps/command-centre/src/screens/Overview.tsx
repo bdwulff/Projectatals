@@ -8,7 +8,8 @@ import { Card, Chip, Done, ErrorBanner, FakeBadge, Loading, RefreshButton, State
 import type { Tab } from "../components/Nav";
 
 const CONNECTION_NAMES: Record<string, string> = {
-  "BoxSafe (Supabase)": "BoxSafe", "Mailer (Resend)": "Email", "Owner calls (Twilio)": "Phone calls",
+  "BoxSafe (Supabase)": "BoxSafe", "Mailer (Resend)": "Quote emails", "Owner calls (Twilio)": "Phone calls",
+  "Research (Tavily)": "Web research",
   "Website checker": "Website checks", "Research (Brave Search)": "Web research", "Owner push (ntfy)": "Push notifications",
 };
 

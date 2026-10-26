@@ -15,7 +15,7 @@ export interface ResearchLookupResult {
   title: string;
   url: string;
   description: string;
-  source: "Brave Search";
+  source: "Brave Search" | "Tavily";
   retrievedAt: string;
   trust: "untrusted_web_content";
 }

@@ -19,6 +19,16 @@ function runtime(dbPath?: string) {
 afterEach(() => { for (const rt of created.splice(0)) rt.atlas.deps.store.close(); vi.useRealTimers(); });
 
 describe("background research", () => {
+  it("can run bounded keyless discovery and private preparation once daily without a paid search key", async () => {
+    const rt = runtime();
+    const discover = vi.spyOn(rt.acquisition, "discover").mockResolvedValue([]);
+    const worker = createBackgroundWorker(rt, { ...enabled, BRAVE_SEARCH_API_KEY: "", ATLAS_RESEARCH_PROVIDER: "tavily", ATLAS_RESEARCH_COUNT: "99" });
+    expect((await worker.tick()).research.state).toBe("completed");
+    expect((await worker.tick()).research.state).toBe("already_ran");
+    expect(discover).toHaveBeenCalledExactlyOnceWith({ area: "Berwick, Victoria", count: 5 });
+    expect(rt.fakes.mailer.sent).toHaveLength(0);
+    expect(rt.atlas.quotes.list()).toHaveLength(0);
+  });
   it("uses Melbourne day boundaries across daylight saving", () => {
     expect(melbourneResearchDay(new Date("2026-10-25T12:59:59Z"))).toBe("2026-10-25");
     expect(melbourneResearchDay(new Date("2026-10-25T13:00:00Z"))).toBe("2026-10-26");

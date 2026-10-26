@@ -99,10 +99,17 @@ using `.mcp.json.example` and `docs/AUTOMATION-SETUP.md`.
 
 ## Client research and lookups
 
-`Find five clients around Berwick` creates sourced, unverified discovery candidates.
-`Look up ...` returns source excerpts. Automatic daily discovery requires explicit
-live configuration and a Brave Search key; it never contacts clients or creates
-quotes. `docs/INITIAL-RESEARCH.md` contains a separately sourced first shortlist.
+Open **Studio** for company discovery, three creative website directions, private
+concept previews and exact email review. `Jarvis, find three businesses near
+Berwick` now prepares source-backed candidates, private concepts and email drafts.
+Free, rate-limited Tavily keyless search is the default; a configured Brave key
+can select that provider explicitly. `Look up ...` returns attributed excerpts.
+
+Daily discovery can prepare concepts between conversations; it never approves
+contact or sends unseen messages. A verified Gmail OAuth or Resend connection,
+source-backed contact eligibility and exact owner approval are required to publish
+and send each initial email. No automatic follow-ups run. See
+[CLIENT-ACQUISITION.md](docs/CLIENT-ACQUISITION.md) for setup, licence sources and limits.
 `docs/LIVE-RESEARCH.md` explains the provider and evidence limits.
 
 ## Private Jarvis on Mac and iPhone

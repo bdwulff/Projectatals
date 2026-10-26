@@ -1,5 +1,6 @@
 import { installDeviceRoutes } from "./devices.js";
 import { createOwnerVoice, installVoiceRoutes } from "./voice.js";
+import { installAcquisitionRoutes } from "./acquisition.js";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { buildDailyBoxSafeBriefing } from "@atlas/core";
@@ -20,10 +21,13 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   installOwnerAuth(app, rt, authOptions);
   installVoiceRoutes(app, createOwnerVoice(rt));
   const deviceControl = installDeviceRoutes(app, rt);
+  const acquisitionControl = installAcquisitionRoutes(app, rt);
   app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
   app.get("/api/status", async (c) => {
     const connections = await atlas.connections();
+    const acquisition = await rt.acquisition.snapshot();
+    connections.push({ name: "Prospect emails", state: acquisition.email.state, mode: rt.mode, checkedAt: atlas.clock().toISOString(), detail: acquisition.email.detail });
     return c.json({ atlas: { online: true, version: "0.1.0", time: atlas.clock().toISOString(), mode: rt.mode, timezone: "Australia/Melbourne" }, connections, background: atlas.deps.store.getMemory("background.lastRun") ?? null });
   });
   app.get("/api/briefing", async (c) => c.json(await atlas.briefing()));
@@ -81,7 +85,7 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   app.post("/api/command", async (c) => {
     const body = (await c.req.json()) as { text: string };
     if (!body?.text?.trim()) return c.json({ error: "text required" }, 400);
-    const r = await deviceControl.handleCommand(c, body.text) ?? await atlas.handleCommand(body.text);
+    const r = await deviceControl.handleCommand(c, body.text) ?? await acquisitionControl.handleCommand(body.text) ?? await atlas.handleCommand(body.text);
     const speech = atlas.deps.speech ? await atlas.deps.speech.speak(r.reply) : null;
     return c.json({ ...r, speech });
   });
