@@ -1,6 +1,6 @@
 # Atlas installation and operational report — 26 October 2026
 
-> Current update: the Email & websites screen is deployed. BoxSafe and Mountain Timbers are registered with verified project references and both public pages passed native HTTP checks. The secure read-only Lovable connector awaits the owner’s dedicated workspace key. Hosted email remains disconnected pending mailbox/provider choice and authentication; inbox reading is not implemented. All 372 tests and 49 connection browser checks passed. Voice remains available. See [EMAIL-AND-WEBSITE-CONNECTIONS.md](EMAIL-AND-WEBSITE-CONNECTIONS.md) and [DEPLOYMENT.md](DEPLOYMENT.md). Earlier sections record prior milestones.
+> Current update: Railway deployment `889323aa-3f3a-4f1f-b75a-db3fde6e2aaf` reached SUCCESS with private Google Web OAuth-client upload, exact-mailbox binding and a read-only Gmail inbox. The existing approved sending path remains guarded. Gmail is not connected: the owner must create the Google Web client, enable Gmail API, upload its JSON privately and consent. All 401 workspace tests, 116 browser checks and 23 final hosted checks passed. The intended mailbox is saved privately; no real email was read or sent. BoxSafe and Mountain Timbers remain registered and publicly reachable; the secure read-only Lovable connector awaits the owner’s workspace key. See [EMAIL-AND-WEBSITE-CONNECTIONS.md](EMAIL-AND-WEBSITE-CONNECTIONS.md) and [DEPLOYMENT.md](DEPLOYMENT.md). Earlier sections record prior milestones.
 
 ## DELIVERED
 
@@ -128,3 +128,64 @@ The owner still needs to enter ElevenLabs API key and voice ID in Railway Variab
 Voice remains disabled and disconnected at verification; no synthesis or phone call
 is claimed. Business-data, search, mail, push and telephone connections also remain
 unconfigured. See DEPLOYMENT.md for the exact next actions and current limits.
+
+## Gmail connection and read-only inbox release
+
+### DELIVERED
+
+Railway deployment `889323aa-3f3a-4f1f-b75a-db3fde6e2aaf` reached **SUCCESS**.
+The owner-protected Gmail setup now accepts a Google Web OAuth-client JSON file,
+stores client credentials and refresh tokens encrypted on the server, and binds
+sign-in and reads to the exact mailbox selected privately in the app. No owner
+mailbox address, phone number or access key is included in public source.
+
+The inbox supports explicit refresh/search of up to 20 summaries and opening an
+individual message as plain text. It does not load messages automatically, fetch
+remote images or attachments, or render active HTML. Email content is untrusted
+data and cannot approve actions. Gmail requests read-only and send permissions
+alongside OpenID/email identity; no archive, delete or mark-read operation is
+provided. Existing outgoing prospect email still requires exact-version approval
+and durable send guards. Saving credentials or connecting sends no message.
+
+Validation passed: 401 workspace tests and 116 browser checks. Provider responses
+and mail records used by these tests are fictional. Final hosted verification
+also passed all 23 checks: Secure owner login, unauthenticated mail-route denial,
+private intended-mailbox saving and logout revocation all passed. Live Gmail
+honestly reported no configured OAuth client, no source or linked address,
+`inboxReady: false` and `state: not_connected`. Inbox access returned503 without
+fixtures; **Check my inbox** returned setup guidance without reading mail.
+
+BoxSafe and Mountain Timbers remained registered with HTTP200 public page checks.
+ElevenLabs reported George connected with playback enabled; no audio was generated
+and no paid voice request was made. Deployed JavaScript/CSS SHA-256 hashes matched
+the exact build that passed the 116 Gmail browser checks. The private verification
+record is `/workspace/scratch/gmail-live-verification.json`, outside the repository;
+its private configuration must not be committed. These results verify the hosted
+implementation and honest disconnected state, not a working Google grant.
+
+### NEEDS BRANDON'S DECISION
+
+Google OAuth client configuration and consent remain required. Gmail is **not
+connected**, and no real inbox or send result is claimed. The Google client must
+belong to a project the owner authorises; the separate ChatGPT Gmail connector
+does not supply credentials to the hosted app.
+
+### NEXT ACTION
+
+1. In Google Cloud, enable Gmail API and configure Google Auth Platform, including
+   the selected mailbox as a test user when the app is in Testing.
+2. Create a Web application OAuth client using the exact redirect URI displayed
+   in Devices → Email & websites → Gmail setup, then download its JSON file.
+3. Upload that file privately in Jarvis and consent using the selected mailbox.
+   Do not put client secrets into chat. Testing-mode Google grants may need
+   reconnection after seven days.
+4. After consent, verify the hosted account state, then explicitly refresh the
+   inbox if desired. Record real Google connection evidence before reporting
+   Gmail operational.
+
+### BUDGET
+
+No real email was read or sent, no provider credit was consumed, and no new
+subscription, purchase or service upgrade was made for this release. Existing
+Railway usage continues; account billing and the remaining experimentation
+balance have not been reconciled. The experimentation ceiling remains A$300.

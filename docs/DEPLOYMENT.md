@@ -1,7 +1,14 @@
 # Jarvis hosted deployment
 
-Verified 26 October 2026. Railway reported deployment `3233ef8b-578a-42aa-afee-09487732526e`
-**SUCCESS**. This is a CLI source upload, not an unverified queued build.
+Railway reported Gmail release deployment `889323aa-3f3a-4f1f-b75a-db3fde6e2aaf`
+**SUCCESS** on 26 October 2026. Final live HTTP verification passed all 23 checks;
+the Gmail connection itself remains disconnected without the owner's Google OAuth
+client and consent. The release passed 401 workspace tests and 116 browser checks
+before deployment. See the Gmail release section below.
+
+The preceding connection release, deployment `3233ef8b-578a-42aa-afee-09487732526e`,
+also reached **SUCCESS**. Its live verification is recorded below as historical
+evidence; it does not establish final verification of the current deployment.
 
 - App: https://atlas-command-centre-production.up.railway.app
 - Project: `7e09329c-bfbb-4e13-84b3-15c9e4ef2b75`
@@ -15,7 +22,7 @@ monorepo entry point. The build compiles the workspace and packages the Mac ZIP.
 Owner credentials and the actual phone number are server-side variables and are
 not committed. The owner sign-in key was delivered privately in the conversation.
 
-Live HTTP verification passed:
+Live HTTP verification of the preceding connection release passed:
 
 - `/healthz`, the login page and web-app manifest return200.
 - Operational status, devices, voice and Mac download routes return401 without a session.
@@ -27,7 +34,7 @@ Live HTTP verification passed:
 - The read-only ElevenLabs check reports George connected with explicit playback
   enabled. Release verification generated no audio.
 
-The release includes the responsive voice core, private sign-in, command dock,
+The preceding release includes the responsive voice core, private sign-in, command dock,
 navigation and unavailable-data panels described in [JARVIS-INTERFACE.md](JARVIS-INTERFACE.md).
 All 372 workspace tests and the production build passed before release.
 The connection screen passed 49 browser checks. The prior voice release passed
@@ -57,12 +64,12 @@ as ANBF. Public page checks do not establish private customer-data or editing
 access. The actual voice command **Which websites are linked?** returned these
 two registered names and the honest workspace-connection state.
 
-Both hosted mail transports remain **not connected**, with no selected sender
-address configured. Gmail works through the separate ChatGPT connector, but its
-credentials are not transferred to Jarvis. Current hosted mail adapters are
-outbound only; inbox reading/native Outlook or iCloud sign-in still require the
-chosen provider's implementation and authorisation. No account was created or
-chosen on the owner's behalf.
+At this preceding release, both hosted mail transports were **not connected**,
+with no selected sender address configured, and the hosted adapters were outbound
+only. The Gmail inbox implementation is recorded in the newer release below.
+The separate ChatGPT Gmail connector's credentials are not transferred to Jarvis.
+Native Outlook or iCloud sign-in still requires the chosen provider's
+implementation and authorisation. No account was created on the owner's behalf.
 
 The deployed JavaScript/CSS match `index-v1-yb8Xj.js` and `index-B5ayzEGl.css` from
 the verified build. Owner auth, read-token scope, credential protection and
@@ -70,6 +77,53 @@ registry/voice routes passed; existing George voice read connectivity remains
 operational. No paid build, message, public website deployment or provider key
 creation occurred during connection verification. Setup and official sources:
 [EMAIL-AND-WEBSITE-CONNECTIONS.md](EMAIL-AND-WEBSITE-CONNECTIONS.md).
+
+## Gmail connection and read-only inbox release
+
+The current deployment adds private Google Web OAuth-client JSON upload in
+Devices → Email & websites → Gmail setup, encrypted server-side client and token
+storage, and binding to the exact mailbox selected privately by the owner. The
+owner's mailbox address and credentials are not embedded in public source.
+
+After consent, the owner can explicitly refresh up to 20 inbox summaries, search
+within the inbox and open an individual message as plain text. Loading the panel
+does not automatically read email. Remote images, active HTML and attachment
+downloads are omitted; message contents remain untrusted data. Requested Gmail
+scopes are `gmail.readonly` and `gmail.send`, alongside OpenID/email identity.
+No archive, delete or mark-read capability is requested or implemented by the
+inbox. The existing exact-version approval and durable send guards still govern
+outgoing prospect email; connecting the mailbox sends nothing.
+
+Google OAuth client configuration is still missing, so Gmail is **not connected**
+and no live mailbox result is claimed. The owner must enable Gmail API, configure
+Google Auth Platform and any required test user, create a Web application OAuth
+client with the exact callback shown in the app, upload its JSON privately, then
+consent using the selected mailbox. A Google external app in Testing may require
+reconnection after seven days. Credentials must not be pasted into chat.
+
+All 401 workspace tests and 116 browser checks passed. Mail/provider responses in
+those tests are fictional and do not establish real Google authorisation.
+Final hosted verification passed all 23 checks:
+
+- Secure owner login succeeded; unauthenticated mail routes returned401 and logout
+  revoked access.
+- The intended mailbox was saved privately. Live Gmail reported no configured
+  client, no client source or linked address, `inboxReady: false` and
+  `state: not_connected`. No private address was added to source.
+- Inbox access returned503 with setup guidance and no fixture fallback. The
+  **Check my inbox** command also returned setup guidance without reading mail.
+- BoxSafe and Mountain Timbers remained registered and their public checks
+  reported HTTP200. This establishes public reachability, not private data access.
+- ElevenLabs reported George connected and playback enabled; no audio was
+  generated and no paid voice request was made.
+- The deployed JavaScript/CSS SHA-256 hashes exactly matched the build that
+  passed all 116 Gmail browser checks.
+
+The verification evidence remains outside the repository at
+`/workspace/scratch/gmail-live-verification.json`; it contains private
+configuration and must not be committed. No real emails were read or sent, no
+provider credit was consumed and no new purchase was made for this release.
+Existing Railway billing is not reconciled by these checks.
 
 ## Interactive voice release
 
