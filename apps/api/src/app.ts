@@ -4,6 +4,7 @@ import { createOwnerTranscription, installTranscriptionRoutes } from "./transcri
 import { commandSafetyReply, createConversationControl, normaliseSpokenCommand } from "./conversation.js";
 import { installAcquisitionRoutes } from "./acquisition.js";
 import { installOwnerUpdateRoutes } from "./owner-updates.js";
+import { installWebsiteRoutes, WebsiteConnections } from "./websites.js";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { buildDailyBoxSafeBriefing } from "@atlas/core";
@@ -28,14 +29,18 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   installTranscriptionRoutes(app, createOwnerTranscription(rt));
   const deviceControl = installDeviceRoutes(app, rt);
   const acquisitionControl = installAcquisitionRoutes(app, rt);
-  const conversationControl = createConversationControl(rt);
+  const websiteConnections = new WebsiteConnections({ atlas, mode: rt.mode, ownerAccessKey: authOptions.ownerAccessKey });
+  const conversationControl = createConversationControl(rt, { websites: () => websiteConnections.snapshot() });
   installOwnerUpdateRoutes(app, rt.ownerUpdates);
+  installWebsiteRoutes(app, websiteConnections);
   app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
   app.get("/api/status", async (c) => {
     const connections = await atlas.connections();
     const acquisition = await rt.acquisition.snapshot();
     connections.push({ name: "Prospect emails", state: acquisition.email.state, mode: rt.mode, checkedAt: atlas.clock().toISOString(), detail: acquisition.email.detail });
+    const websites = websiteConnections.snapshot();
+    connections.push({ name: "Lovable project reading", state: websites.lovable.state, mode: rt.mode, checkedAt: websites.lovable.verifiedAt ?? atlas.clock().toISOString(), detail: websites.lovable.detail });
     return c.json({ atlas: { online: true, version: "0.1.0", time: atlas.clock().toISOString(), mode: rt.mode, timezone: "Australia/Melbourne" }, connections, background: atlas.deps.store.getMemory("background.lastRun") ?? null });
   });
   app.get("/api/briefing", async (c) => c.json(await atlas.briefing()));

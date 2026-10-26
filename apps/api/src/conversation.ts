@@ -72,7 +72,13 @@ const connectionName: Record<string, string> = {
 };
 
 /** Small, read-only conversational commands. This is not a general-purpose language model. */
-export function createConversationControl(rt: Runtime) {
+export interface ConversationOptions {
+  websites?: () => {
+    lovable: { state: "connected" | "not_connected" | "error" | "fake"; detail: string; verifiedAt?: string };
+    sites: Array<{ name: string; url: string; check: { state: string; checkedAt?: string } }>;
+  };
+}
+export function createConversationControl(rt: Runtime, options: ConversationOptions = {}) {
   const owner = rt.atlas.deps.config.ownerName.trim().slice(0, 120) || "Brandon";
   const reply = (kind: string, text: string, data?: unknown): ConversationReply => ({ reply: text, intent: { kind: `conversation.${kind}` }, outcome: rt.mode === "fake" && data !== undefined ? "simulated" : "completed", ...(data === undefined ? {} : { data }) });
   const help = () => reply("help", "You can ask me how many website concepts are ready, what is connected, or what I prepared today. Say ‘find three businesses near Berwick’ to research companies and prepare private concepts, or ‘look up’ followed by your question to search the web. Sending emails and publishing concepts still need your exact review in Studio.");
@@ -86,6 +92,12 @@ export function createConversationControl(rt: Runtime) {
       if (/^(?:are you (?:there|listening|ready)|can you hear me|is this working|does this work)$/.test(text)) return reply("present", `Your message reached me, ${owner}. You can ask about your website concepts, check your connections, or ask me to look something up.`);
       if (/^(?:help|help me|what can you do|what can i ask(?: you)?|what do i say|how (?:can|do) i (?:use|talk to|speak (?:to|with)) (?:you|jarvis|atlas)|(?:i (?:want|need) to )?(?:talk|speak) (?:to|with) you|help me use voice|(?:turn on|enable|start) voice)$/.test(text)) return help();
       if (/^(?:thanks|thank you|cheers)(?:[, ]+(?:jarvis|atlas))?$/.test(text)) return reply("thanks", `You’re welcome, ${owner}. What would you like to do next?`);
+      if (/^(?:(?:what|which) (?:websites|sites) (?:are (?:linked|connected|registered)|do (?:we|i) have)|(?:show|list)(?: me)? (?:my |the )?(?:linked |connected |registered )?(?:websites|sites))$/.test(text) && options.websites) {
+        const websites = options.websites();
+        const names = websites.sites.map(site => site.name);
+        const reading = websites.lovable.state === "connected" ? "Lovable project reading was verified. " : websites.lovable.state === "fake" ? "This is fictional test data. " : "Lovable project reading still needs its workspace connection. ";
+        return reply("websites", `${reading}${names.length ? `Your registered websites are ${list(names)}. ` : "No owned websites are registered yet. "}Open Devices, then Email and websites, for public availability checks and project links. Editing and private business data need their own authorised connections.`, { websites: websites.sites, lovableState: websites.lovable.state });
+      }
       if (/^(?:what(?:'s| is) (?:the )?(?:time|date)(?: now| today)?|what day is it)$/.test(text)) {
         const now = rt.atlas.clock();
         const when = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Melbourne", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }).format(now);
@@ -94,7 +106,8 @@ export function createConversationControl(rt: Runtime) {
       if (/^(?:what(?:'s| is) connected|which (?:services|accounts|systems) are connected|what connections (?:are working|do you have)|(?:check|show me|give me) (?:my |your |the )?connections|are (?:my|the) connections working)$/.test(text)) {
         try {
           const [connections, acquisition, message] = await Promise.all([rt.atlas.connections(), rt.acquisition.snapshot(), rt.ownerUpdates.messageStatus()]);
-          const states = [...connections.map(c => ({ name: connectionName[c.name] ?? c.name, state: c.state })), { name: "prospect email", state: acquisition.email.state }, { name: "Telegram messages", state: message.state }];
+          const websites = options.websites?.();
+          const states = [...connections.map(c => ({ name: connectionName[c.name] ?? c.name, state: c.state })), { name: "prospect email", state: acquisition.email.state }, { name: "Telegram messages", state: message.state }, ...(websites ? [{ name: "Lovable project reading", state: websites.lovable.state }] : [])];
           const connected = [...new Set(states.filter(s => s.state === "connected").map(s => s.name))];
           const unavailable = [...new Set(states.filter(s => s.state === "not_connected" || s.state === "error").map(s => s.name))];
           const simulated = [...new Set(states.filter(s => s.state === "fake").map(s => s.name))];

@@ -152,6 +152,12 @@ recording fallback requires explicit ElevenLabs credit confirmation and a review
 of its transcript before sending. See [VOICE-INTERACTION.md](docs/VOICE-INTERACTION.md)
 for Mac permissions, supported requests and current conversation limits.
 
+**Devices → Email and websites** shows hosted email readiness, supports an
+encrypted read-only Lovable workspace key, and keeps a private registry of owned
+website/project/repository links with manual public-page checks. Read-only
+project metadata is separate from code editing, publishing and private business
+data. See [EMAIL-AND-WEBSITE-CONNECTIONS.md](docs/EMAIL-AND-WEBSITE-CONNECTIONS.md).
+
 Build the Mac download after the dashboard production build:
 
 ```sh

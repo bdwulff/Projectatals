@@ -4,6 +4,7 @@ import { api, melbourneTime, relTime, type DeviceAction, type DevicePairing, typ
 import { useNow, usePoll } from "../hooks";
 import { Card, Chip, Empty, ErrorBanner, Loading, RefreshButton } from "../components/ui";
 import { OwnerUpdates } from "../components/OwnerUpdates";
+import { WebsiteConnections } from "../components/WebsiteConnections";
 
 const ACTION_LABELS: Record<DeviceAction, string> = { "device.status": "Read Mac status", "browser.open": "Open a website", "apps.open": "Open an enabled app" };
 const MAC_APPS = [{ id: "calculator", label: "Calculator" }, { id: "notes", label: "Notes" }, { id: "calendar", label: "Calendar" }];
@@ -121,6 +122,7 @@ export function Devices() {
 
   return (
     <div className="space-y-4">
+      <WebsiteConnections />
       <OwnerUpdates />
       <header className="flex items-end justify-between gap-3">
         <div><div className="label">Your devices</div><h1 className="mt-0.5 text-xl font-medium text-slate-50">Jarvis on your Mac</h1></div>
