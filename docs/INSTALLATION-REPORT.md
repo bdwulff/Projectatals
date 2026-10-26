@@ -1,6 +1,6 @@
 # Atlas installation and operational report — 26 October 2026
 
-> Current update: interactive voice is deployed and verified. Talk to Jarvis is available across all screens, with browser dictation, automatic device spoken replies, follow-up listening and local spoken Stop. All 350 tests and 52 voice browser checks passed. Physical Mac microphone permission remains the owner step; the optional paid transcription fallback is configured but unverified. Branded concepts remain private and email/messaging remain disconnected. See [VOICE-INTERACTION.md](VOICE-INTERACTION.md) and [DEPLOYMENT.md](DEPLOYMENT.md). Earlier sections record prior milestones.
+> Current update: the Email & websites screen is deployed. BoxSafe and Mountain Timbers are registered with verified project references and both public pages passed native HTTP checks. The secure read-only Lovable connector awaits the owner’s dedicated workspace key. Hosted email remains disconnected pending mailbox/provider choice and authentication; inbox reading is not implemented. All 372 tests and 49 connection browser checks passed. Voice remains available. See [EMAIL-AND-WEBSITE-CONNECTIONS.md](EMAIL-AND-WEBSITE-CONNECTIONS.md) and [DEPLOYMENT.md](DEPLOYMENT.md). Earlier sections record prior milestones.
 
 ## DELIVERED
 

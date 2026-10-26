@@ -1,6 +1,6 @@
 # Jarvis hosted deployment
 
-Verified 26 October 2026. Railway reported deployment `351706f4-919c-4f89-8dc1-84784a195177`
+Verified 26 October 2026. Railway reported deployment `3233ef8b-578a-42aa-afee-09487732526e`
 **SUCCESS**. This is a CLI source upload, not an unverified queued build.
 
 - App: https://atlas-command-centre-production.up.railway.app
@@ -23,18 +23,53 @@ Live HTTP verification passed:
 - Authenticated status reports live mode with actual connection states.
 - Authenticated Mac ZIP download returns200 and passes ZIP CRC validation.
 - The deployed Jarvis JavaScript and CSS SHA-256 hashes exactly match the build
-  that passed the new branding, greeting and owner-update browser checks.
+  that passed the new connection-screen browser checks.
 - The read-only ElevenLabs check reports George connected with explicit playback
   enabled. Release verification generated no audio.
 
 The release includes the responsive voice core, private sign-in, command dock,
 navigation and unavailable-data panels described in [JARVIS-INTERFACE.md](JARVIS-INTERFACE.md).
-All 350 workspace tests and the production build passed before release.
-The voice release passed 52 browser checks, 21 recording fallback checks and
+All 372 workspace tests and the production build passed before release.
+The connection screen passed 49 browser checks. The prior voice release passed
+52 browser checks, 21 recording fallback checks and
 eleven independent cancellation/reopening regressions. Speech recognition and
 recording were mocked in these tests; no physical owner microphone was exercised.
 Prior branding/greeting/update browser evidence remains recorded in its release
 reports and feature documents.
+
+## Email and website connection release
+
+Devices now starts with **Email & websites**, containing actual hosted email
+provider state, a secure Lovable workspace key form, cached read-only project
+metadata and a private owned-website registry. The direct Lovable adapter uses
+only fixed HTTPS GET requests with bounded responses/timeouts. It verifies the
+chosen workspace before encrypting a key; no key is present yet, so actual
+hosted Lovable authentication remains **not connected**. No editing/publishing
+capability is claimed by this read-only integration.
+
+Two real owned sites were registered through the owner-protected API after
+release: BoxSafe at `https://app.boxsafe.com.au/` and Mountain Timbers at
+`https://mountaintimbers.com.au/`. Both native production checks returned HTTP200
+and their expected public titles. Their source-verified Lovable project IDs are
+stored, with the verified BoxSafe GitHub repository reference. The similarly
+named Boxsafe Reimagined project was not used: source inspection identified it
+as ANBF. Public page checks do not establish private customer-data or editing
+access. The actual voice command **Which websites are linked?** returned these
+two registered names and the honest workspace-connection state.
+
+Both hosted mail transports remain **not connected**, with no selected sender
+address configured. Gmail works through the separate ChatGPT connector, but its
+credentials are not transferred to Jarvis. Current hosted mail adapters are
+outbound only; inbox reading/native Outlook or iCloud sign-in still require the
+chosen provider's implementation and authorisation. No account was created or
+chosen on the owner's behalf.
+
+The deployed JavaScript/CSS match `index-v1-yb8Xj.js` and `index-B5ayzEGl.css` from
+the verified build. Owner auth, read-token scope, credential protection and
+registry/voice routes passed; existing George voice read connectivity remains
+operational. No paid build, message, public website deployment or provider key
+creation occurred during connection verification. Setup and official sources:
+[EMAIL-AND-WEBSITE-CONNECTIONS.md](EMAIL-AND-WEBSITE-CONNECTIONS.md).
 
 ## Interactive voice release
 
@@ -50,7 +85,7 @@ The actual hosted command endpoint answered a greeting and a polite request for
 current concept counts, and declined negated/explanatory approval phrases without
 changing approvals. Ten private concepts were present in the live check. Existing
 free web lookup, George voice read connectivity, protected routes, session
-revocation and the Mac ZIP integrity also passed. Deployed assets exactly match
+revocation and the Mac ZIP integrity also passed. At voice-release verification, deployed assets matched
 the tested build: `index-BksF833w.js` and `index-Cjw6pBaP.css`.
 
 The optional recording fallback is enabled but remains **unverified**: no actual
