@@ -1,6 +1,6 @@
 # Atlas installation and operational report — 26 October 2026
 
-> Current update: the hosted branding/greeting/update release is verified. Four real business logos and twelve photos are embedded in private concepts; the fifth source restricts copying artwork. Automatic device greetings use no AI credits. Gmail/independent Resend selection and opt-in email/Telegram owner updates are implemented, but no email or messaging account is connected. All 312 tests passed. See [BRANDING-AND-UPDATES.md](BRANDING-AND-UPDATES.md) and [DEPLOYMENT.md](DEPLOYMENT.md). Earlier sections below record prior milestones.
+> Current update: interactive voice is deployed and verified. Talk to Jarvis is available across all screens, with browser dictation, automatic device spoken replies, follow-up listening and local spoken Stop. All 350 tests and 52 voice browser checks passed. Physical Mac microphone permission remains the owner step; the optional paid transcription fallback is configured but unverified. Branded concepts remain private and email/messaging remain disconnected. See [VOICE-INTERACTION.md](VOICE-INTERACTION.md) and [DEPLOYMENT.md](DEPLOYMENT.md). Earlier sections record prior milestones.
 
 ## DELIVERED
 

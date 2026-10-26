@@ -1,6 +1,6 @@
 # Jarvis hosted deployment
 
-Verified 26 October 2026. Railway reported deployment `73f18938-fdc1-462e-8519-dd3046912a07`
+Verified 26 October 2026. Railway reported deployment `351706f4-919c-4f89-8dc1-84784a195177`
 **SUCCESS**. This is a CLI source upload, not an unverified queued build.
 
 - App: https://atlas-command-centre-production.up.railway.app
@@ -29,9 +29,45 @@ Live HTTP verification passed:
 
 The release includes the responsive voice core, private sign-in, command dock,
 navigation and unavailable-data panels described in [JARVIS-INTERFACE.md](JARVIS-INTERFACE.md).
-All 312 workspace tests and the production build passed before release.
-The new browser suites passed 39 Studio checks, 30 greeting/update checks, nine
-renderer layouts and ten layouts using the actual sourced business profiles.
+All 350 workspace tests and the production build passed before release.
+The voice release passed 52 browser checks, 21 recording fallback checks and
+eleven independent cancellation/reopening regressions. Speech recognition and
+recording were mocked in these tests; no physical owner microphone was exercised.
+Prior branding/greeting/update browser evidence remains recorded in its release
+reports and feature documents.
+
+## Interactive voice release
+
+The authenticated app now has a persistent **Talk to Jarvis** control on every
+screen, with direct entry at `/#talk`. It supports live browser transcripts,
+one submission per final utterance, automatic device-voice replies, optional
+follow-up listening, cached repeat and a local spoken stop. Close, sign-out,
+backgrounding, permission errors and explicit Stop stop capture/playback; delayed
+responses cannot restart them. The conversation survives screen navigation.
+Mac microphone permission guidance is visible in the panel.
+
+The actual hosted command endpoint answered a greeting and a polite request for
+current concept counts, and declined negated/explanatory approval phrases without
+changing approvals. Ten private concepts were present in the live check. Existing
+free web lookup, George voice read connectivity, protected routes, session
+revocation and the Mac ZIP integrity also passed. Deployed assets exactly match
+the tested build: `index-BksF833w.js` and `index-Cjw6pBaP.css`.
+
+The optional recording fallback is enabled but remains **unverified**: no actual
+paid transcription has been attempted. Its existing server key is configured;
+Speech-to-Text permission and provider credits are not established by the working
+text-to-speech voice. Read-only status checks and a rejected empty request left
+its upload/attempt counters at zero. Each clip requires explicit credit consent,
+uses fixed Scribe v2, and fills the text field for review before Send. Durable
+attempt/byte quotas and one-attempt jobs are enforced; raw audio and transcripts
+are not persisted by the transcription module. Browser dictation and ordinary
+device replies do not invoke ElevenLabs.
+
+Physical Mac/Safari/Chrome microphone capture and sound output require the owner
+browser's permissions and remain unverified here. Conversation is limited to the
+implemented business commands and web lookup, with friendly deterministic help;
+no unrestricted model, background wake word or automatic paid speech is claimed.
+See [VOICE-INTERACTION.md](VOICE-INTERACTION.md).
 
 ## Branding, greetings and owner updates
 
