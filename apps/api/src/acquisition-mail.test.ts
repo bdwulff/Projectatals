@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SqliteStore } from "@atlas/core";
-import { AcquisitionMailError, GmailAcquisitionMailTransport, ResendAcquisitionMailTransport, type AcquisitionMailInput } from "./acquisition-mail.js";
+import { AcquisitionMailError, GmailAcquisitionMailTransport, ResendAcquisitionMailTransport, SelectableAcquisitionMailTransport, type AcquisitionMailTransport, type AcquisitionMailInput } from "./acquisition-mail.js";
 
 const origin = "https://jarvis.example.test";
 const ownerKey = "fictional-owner-key-".repeat(3);
@@ -220,5 +220,98 @@ describe("Resend HTTPS acquisition mail", () => {
     await expect(transport.send(input())).rejects.toMatchObject({ code: "uncertain" });
     await expect(transport.send(input())).rejects.toMatchObject({ code: "uncertain" });
     expect(request.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+});
+
+
+describe("explicit sending connection selection", () => {
+  function transport(name: string, connected = true) {
+    return {
+      status: vi.fn(async () => ({ state: connected ? "connected" as const : "not_connected" as const, provider: name, detail: `${name} fictional connection`, ...(connected ? { sender: from } : {}) })),
+      send: vi.fn(async () => ({ providerRef: `fictional_${name}_123456`, acceptedAt: "2026-10-26T00:00:00.000Z" })),
+    };
+  }
+  it("uses the explicit default, persists owner selection and never contacts unselected providers", async () => {
+    const db = store(), gmail = transport("gmail"), resend = transport("resend");
+    const router = new SelectableAcquisitionMailTransport({ store: db, transports: { gmail, resend }, defaultProvider: "resend" });
+    expect(router.selected()).toBe("resend");
+    expect(await router.status()).toMatchObject({ state: "connected", provider: "resend" });
+    await router.send(input()); expect(resend.send).toHaveBeenCalledOnce(); expect(gmail.status).not.toHaveBeenCalled(); expect(gmail.send).not.toHaveBeenCalled();
+    router.select("gmail");
+    const restarted = new SelectableAcquisitionMailTransport({ store: db, transports: { gmail, resend }, defaultProvider: "resend" });
+    expect(restarted.selected()).toBe("gmail"); await restarted.send(input({ idempotencyKey: "acquisition:fixture:2" })); expect(gmail.send).toHaveBeenCalledOnce();
+    expect(JSON.stringify(db.getMemory("acquisition.mail.provider"))).toBe('"gmail"');
+  });
+  it("never falls back from an unavailable selected connection to another working sender", async () => {
+    const gmail = transport("gmail", false), resend = transport("resend");
+    gmail.send.mockRejectedValue(new AcquisitionMailError("not_configured", "Fictional Gmail missing"));
+    const router = new SelectableAcquisitionMailTransport({ store: store(), transports: { gmail, resend }, defaultProvider: "gmail" });
+    expect(await router.status()).toMatchObject({ state: "not_connected", provider: "gmail" });
+    await expect(router.send(input())).rejects.toMatchObject({ code: "not_configured" });
+    expect(resend.status).not.toHaveBeenCalled(); expect(resend.send).not.toHaveBeenCalled();
+  });
+  it("fails closed on an invalid configured or saved provider and accepts only two supported selections", async () => {
+    const db = store(), gmail = transport("gmail"), resend = transport("resend");
+    const router = new SelectableAcquisitionMailTransport({ store: db, transports: { gmail, resend }, defaultProvider: "smtp" });
+    expect(router.selected()).toBeNull(); expect(await router.status()).toMatchObject({ state: "error" });
+    await expect(router.send(input())).rejects.toMatchObject({ code: "not_configured" });
+    for (const bad of [undefined, "smtp", "https://attacker.example.test", {}, "resend\n"]) expect(() => router.select(bad)).toThrow(AcquisitionMailError);
+    expect(gmail.status).not.toHaveBeenCalled(); expect(resend.status).not.toHaveBeenCalled();
+    router.select("resend"); expect(router.selected()).toBe("resend");
+    db.setMemory("acquisition.mail.provider", { injected: "gmail" }); expect(router.selected()).toBeNull();
+  });
+  it("lists both connection statuses and setup steps without sending email", async () => {
+    const gmail = transport("gmail", false), resend = transport("resend");
+    const router = new SelectableAcquisitionMailTransport({ store: store(), transports: { gmail, resend }, defaultProvider: "resend" });
+    const catalogue = await router.providers();
+    expect(catalogue.selected).toBe("resend"); expect(catalogue.providers).toHaveLength(2);
+    expect(catalogue.providers.find(provider => provider.id === "resend")).toMatchObject({ selected: true, status: { state: "connected" }, requiredSettings: ["RESEND_API_KEY", "ATLAS_OUTREACH_FROM"] });
+    expect(catalogue.providers.find(provider => provider.id === "resend")!.description).toMatch(/Microsoft 365/);
+    expect(gmail.send).not.toHaveBeenCalled(); expect(resend.send).not.toHaveBeenCalled();
+  });
+  it("locks connection selection throughout provider verification and submission", async () => {
+    let finish: ((value: { providerRef: string; acceptedAt: string }) => void) | undefined;
+    const gmail: AcquisitionMailTransport = { status: async () => ({ state: "connected", provider: "gmail", detail: "fictional" }), send: () => new Promise(resolve => { finish = resolve; }) };
+    const resend = transport("resend");
+    const router = new SelectableAcquisitionMailTransport({ store: store(), transports: { gmail, resend } });
+    const pending = router.send(input());
+    expect(() => router.select("resend")).toThrow(/submission is in progress/);
+    finish!({ providerRef: "fictional_gmail_123456", acceptedAt: "2026-10-26T00:00:00.000Z" }); await pending;
+    expect(router.select("resend")).toBe("resend"); expect(resend.send).not.toHaveBeenCalled();
+  });
+  it("discards a status check made stale by an owner connection change", async () => {
+    let finish: ((value: { state: "connected"; provider: string; detail: string; sender: string }) => void) | undefined;
+    const gmail: AcquisitionMailTransport = { status: () => new Promise(resolve => { finish = resolve; }), send: vi.fn() };
+    const resend = transport("resend");
+    const router = new SelectableAcquisitionMailTransport({ store: store(), transports: { gmail, resend } });
+    const pending = router.status(); router.select("resend");
+    finish!({ state: "connected", provider: "gmail", detail: "fictional", sender: from });
+    expect(await pending).toMatchObject({ state: "error", detail: expect.stringContaining("changed during verification") });
+  });
+});
+
+describe("owner update mail purpose", () => {
+  it("omits marketing unsubscribe headers for owner-only Gmail updates and binds the purpose", async () => {
+    const { gmail, request, link } = gmailSetup(); await link();
+    const update = input({ to: from, purpose: "owner_update", unsubscribeUrl: origin + "/#updates" });
+    // Fragment-free management URLs use the same bounded HTTPS validation as outreach.
+    await expect(gmail.send(update)).rejects.toMatchObject({ code: "invalid_request" });
+    const valid = { ...update, unsubscribeUrl: origin + "/?settings=updates" };
+    await gmail.send(valid);
+    const [, init] = sendRequests(request)[0]!;
+    const mime = Buffer.from(JSON.parse(String(init?.body)).raw, "base64url").toString("utf8");
+    expect(mime).not.toContain("List-Unsubscribe");
+    await expect(gmail.send({ ...valid, purpose: "outreach" })).rejects.toMatchObject({ code: "invalid_request" });
+    expect(sendRequests(request)).toHaveLength(1);
+  });
+  it("omits marketing unsubscribe headers for Resend owner updates and preserves them for outreach", async () => {
+    const request = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => init?.method === "POST" ? Response.json({ id: "fictional_resend_owner_123" }) : Response.json({ data: [{ name: "EXAMPLE.TEST", status: "verified" }] }));
+    const mail = new ResendAcquisitionMailTransport({ apiKey: "fictional-resend-key", fromAddress: from, store: store(), request });
+    await mail.send(input({ to: from, purpose: "owner_update", unsubscribeUrl: origin + "/?settings=updates" }));
+    const first = JSON.parse(String(request.mock.calls.find(([, init]) => init?.method === "POST")![1]?.body));
+    expect(first.headers).toEqual({});
+    await mail.send(input({ idempotencyKey: "acquisition:fixture:outreach" }));
+    const posts = request.mock.calls.filter(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(posts[1]![1]?.body)).headers).toMatchObject({ "List-Unsubscribe": `<${input().unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
   });
 });

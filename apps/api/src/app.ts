@@ -1,6 +1,7 @@
 import { installDeviceRoutes } from "./devices.js";
 import { createOwnerVoice, installVoiceRoutes } from "./voice.js";
 import { installAcquisitionRoutes } from "./acquisition.js";
+import { installOwnerUpdateRoutes } from "./owner-updates.js";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { buildDailyBoxSafeBriefing } from "@atlas/core";
@@ -22,6 +23,7 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   installVoiceRoutes(app, createOwnerVoice(rt));
   const deviceControl = installDeviceRoutes(app, rt);
   const acquisitionControl = installAcquisitionRoutes(app, rt);
+  installOwnerUpdateRoutes(app, rt.ownerUpdates);
   app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
   app.get("/api/status", async (c) => {

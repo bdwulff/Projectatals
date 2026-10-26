@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, AudioLines, Check, ChevronRight, CircleAlert, LockKeyhole, Mic, MicOff, PackageSearch, ScanSearch, Sunrise, Volume2, VolumeX } from "lucide-react";
 import { api, type CommandResult } from "../api";
-import { cloudVoiceStatus, requestCloudVoice, type CloudVoiceStatus } from "../voice";
+import { cloudVoiceStatus, makeDeviceUtterance, requestCloudVoice, setDeviceVoiceActivity, type CloudVoiceStatus } from "../voice";
 import { JarvisCore, type JarvisState } from "./JarvisCore";
 
 interface Turn {
@@ -73,6 +73,10 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
   const stateDetail = listening ? "Microphone active · speak your command" : busy ? "Processing your command" : voiceBusy !== null ? "Preparing your ElevenLabs preview" : speaking ? "Voice playback in progress" : voiceError || interactionError ? "See the response below" : micPending ? "Waiting for microphone access" : Recognition ? "Tap the core to speak, or type below" : "Type a command below to begin";
 
   useEffect(() => {
+    setDeviceVoiceActivity("command-bar", busy || micPending || listening || speaking || voiceBusy !== null);
+  }, [busy, micPending, listening, speaking, voiceBusy]);
+
+  useEffect(() => {
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: reduceMotion ? "auto" : "smooth" });
   }, [turns, busy]);
@@ -88,8 +92,8 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
       const recognition = recRef.current;
       recRef.current = null;
       if (recognition) { recognition.onstart = recognition.onend = recognition.onerror = recognition.onresult = null; try { recognition.abort ? recognition.abort() : recognition.stop(); } catch { /* Already stopped. */ } }
-      utterance.current = null;
-      window.speechSynthesis?.cancel();
+      if (utterance.current) { utterance.current = null; window.speechSynthesis?.cancel(); }
+      setDeviceVoiceActivity("command-bar", false);
       for (const url of generatedAudio.current) URL.revokeObjectURL(url);
     };
   }, []);
@@ -124,6 +128,7 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
   };
 
   const prepareAudio = (audio: HTMLAudioElement) => {
+    setDeviceVoiceActivity("command-bar", true);
     stopMic();
     if (player.current && player.current !== audio) player.current.pause();
     utterance.current = null;
@@ -158,6 +163,7 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
     if (audioUrls[turn.id] && existing) { playExistingAudio(existing); return; }
     try {
       if (!cloudVoice?.providerAvailable || !cloudVoice.enabled) throw new Error("ElevenLabs is not connected and enabled. Device voice remains available.");
+      setDeviceVoiceActivity("command-bar", true);
       stopMic();
       stopPlayback();
       voiceInFlight.current = true;
@@ -180,12 +186,11 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
   const say = (t: string) => {
     if (!deviceSpeechEnabled.current || !ttsSupported) return;
     try {
+      setDeviceVoiceActivity("command-bar", true);
       stopMic();
       stopPlayback();
-      const u = new SpeechSynthesisUtterance(t);
+      const u = makeDeviceUtterance(t);
       utterance.current = u;
-      u.lang = "en-AU";
-      u.rate = 1.02;
       u.onstart = () => { if (utterance.current === u) setSpeaking(true); };
       u.onend = u.onerror = () => { if (utterance.current === u) { utterance.current = null; setSpeaking(false); } };
       window.speechSynthesis.speak(u);
@@ -195,6 +200,7 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
   const submit = async (raw?: string) => {
     const q = (raw ?? text).trim();
     if (!q || busy) return;
+    setDeviceVoiceActivity("command-bar", true);
     stopMic();
     stopPlayback();
     setInteractionError(null);
@@ -219,6 +225,7 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
   const toggleMic = () => {
     if (!Recognition || busy || voiceBusy !== null) return;
     if (listening || micPending) { stopMic(); return; }
+    setDeviceVoiceActivity("command-bar", true);
     stopPlayback();
     setInteractionError(null);
     setVoiceError(null);

@@ -10,6 +10,8 @@ import { BoxSafe } from "./screens/BoxSafe";
 import { Finance } from "./screens/Finance";
 import { OwnerLogin } from "./components/OwnerLogin";
 import { Devices } from "./screens/Devices";
+import { AutomaticGreeting } from "./components/AutomaticGreeting";
+import { resetGreetingSession } from "./voice";
 
 const TAB_KEY = "atlas.tab";
 
@@ -35,7 +37,9 @@ export default function App() {
     setChecking(true);
     setSessionError(null);
     try {
-      setSession(await api.session());
+      const current = await api.session();
+      if (!current.authenticated) resetGreetingSession();
+      setSession(current);
     } catch (e) {
       setSession(null);
       setSessionError(e instanceof Error ? e.message : "Atlas could not check your session.");
@@ -47,6 +51,7 @@ export default function App() {
   useEffect(() => {
     void refreshSession();
     const expired = () => {
+      resetGreetingSession();
       setSession((current) => ({ configured: current?.configured ?? true, authenticated: false }));
       setSessionError("Your session has expired. Sign in again to continue.");
     };
@@ -59,6 +64,7 @@ export default function App() {
     setSessionError(null);
     try {
       await api.logout();
+      resetGreetingSession();
       setSession({ configured: true, authenticated: false });
     } catch (e) {
       setSessionError(e instanceof Error ? `Sign-out was not confirmed: ${e.message}` : "Sign-out was not confirmed. Try again.");
@@ -70,10 +76,10 @@ export default function App() {
   if (checking || !session?.authenticated) {
     return <OwnerLogin configured={session?.configured ?? false} loading={checking} error={sessionError} onRetry={() => void refreshSession()} onSignedIn={refreshSession} />;
   }
-  return <CommandCentre onLogout={() => void logout()} signingOut={signingOut} sessionError={sessionError} developmentBypass={session.developmentBypass ?? false} />;
+  return <CommandCentre onLogout={() => void logout()} signingOut={signingOut} sessionError={sessionError} developmentBypass={session.developmentBypass ?? false} sessionId={session.expiresAt ?? "owner-session"} />;
 }
 
-function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass }: { onLogout: () => void; signingOut: boolean; sessionError: string | null; developmentBypass: boolean }) {
+function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass, sessionId }: { onLogout: () => void; signingOut: boolean; sessionError: string | null; developmentBypass: boolean; sessionId: string }) {
   const [tab, setTab] = useState<Tab>(readTab);
   const status = usePoll<Status>(() => api.status(), [], 30_000);
   const pendingApprovals = usePoll<ApprovalRequest[]>(() => api.approvals(), [], 30_000);
@@ -134,6 +140,7 @@ function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass }
           </div>
         </header>
         <main id="main-content" tabIndex={-1} className="jarvis-main">
+        <AutomaticGreeting sessionId={sessionId} />
         {sessionError && <div role="alert" className="glass mb-4 border-danger/40 bg-danger/10 p-3 text-sm text-danger-soft">{sessionError}</div>}
         {status.error && (
           <div role="alert" className="glass mb-4 border-danger/40 bg-danger/10 p-3 text-sm text-danger-soft">Jarvis cannot reach the server. Displayed information may be out of date. {status.error}</div>

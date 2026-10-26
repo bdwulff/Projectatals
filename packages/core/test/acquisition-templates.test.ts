@@ -2,11 +2,23 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { renderDemoWebsite, safeDemoWebsite, type DemoBusinessInput } from "../src/acquisition/demo-renderer.js";
 import { DEMO_TEMPLATES, getDemoTemplate, selectDemoTemplate } from "../src/acquisition/templates.js";
+import type { BusinessImage, BusinessProfile } from "../src/acquisition/business-profile.js";
 
 const business: DemoBusinessInput = {
   businessName: "Example Fencing (fictional)", location: "Berwick, Victoria", industry: "Fencing and timber trades",
   services: ["Timber fencing", "Gate installation", "Repairs"], fixture: true,
 };
+
+const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4N0AAAAASUVORK5CYII=", "base64");
+const image = (alt = "A business photograph"): BusinessImage => ({
+  dataUrl: `data:image/png;base64,${png.toString("base64")}`, mime: "image/png", sha256: createHash("sha256").update(png).digest("hex"),
+  width: 1, height: 1, alt, sourceUrl: "https://business.com/images/official-photo.png?tracking=removed",
+});
+const profile = (): BusinessProfile => ({
+  state: "ready", detail: "Public details and raster images sourced from the business website.", sourceUrl: "https://business.com/", fetchedAt: "2026-10-26T00:00:00.000Z",
+  description: "The business provides fencing and gate installation in Berwick.", address: "10 Sample Road, Berwick VIC 3806", phone: "+61 3 9000 0000",
+  services: ["Gate installation"], logo: image("Business logo"), images: [image("The business’s first photo"), image("The business’s second photo"), image("The business’s third photo")], notices: [],
+});
 
 describe("free-template concept renderer", () => {
   it("renders deterministic immutable concepts with honest origin, source licences and fictional notice", () => {
@@ -96,5 +108,76 @@ describe("free-template concept renderer", () => {
     expect(selectDemoTemplate("Accounting").id).toBe("folio");
     expect(new Set(DEMO_TEMPLATES.map(template => renderDemoWebsite({ ...business, templateId: template.id }).contentHash)).size).toBe(3);
     expect(getDemoTemplate("fieldwork").inspiration.name).toBe("ScrewFast");
+  });
+
+  it.each(DEMO_TEMPLATES)("$name embeds sourced branding and photos with factual details and explicit provenance", template => {
+    const result = renderDemoWebsite({ ...business, templateId: template.id, businessProfile: profile() });
+    expect(result.html).toContain('class="business-logo"');
+    expect(result.html).toContain('class="business-hero-image"');
+    expect(result.html).toContain('class="business-gallery"');
+    expect((result.html.match(/<img /g) ?? []).length).toBe(4);
+    expect(result.html).toContain(`src="data:image/png;base64,${png.toString("base64")}"`);
+    expect(result.html).toContain("10 Sample Road, Berwick VIC 3806");
+    expect(result.html).toContain("Street address / business website");
+    expect(result.html).toContain("The business provides fencing and gate installation in Berwick.");
+    expect(result.html).toContain("Business information source ↗");
+    expect(result.html).toContain("Usage rights require confirmation.");
+    expect(result.html).toContain("Their inclusion does not establish ownership, permission or endorsement");
+    expect(result.html).toContain('href="https://business.com/images/official-photo.png"');
+    expect(result.html).not.toContain("tracking=removed");
+    expect(result.html).not.toMatch(/src="https?:|srcset=|<script\b|<form\b|onerror=/);
+    expect(result.externalAssets).toEqual([]);
+    expect(result.contentSecurityPolicy).toContain("img-src data:");
+    expect(result.contentSecurityPolicy).toContain("connect-src 'none'");
+  });
+
+  it("keeps manually supplied services ahead of machine-extracted facts, with honest fallbacks for absent images", () => {
+    const businessProfile = profile();
+    businessProfile.logo = undefined;
+    businessProfile.images = [];
+    const explicit = renderDemoWebsite({ ...business, businessProfile });
+    expect(explicit.html).toContain("Timber fencing");
+    expect(explicit.html).not.toContain('class="business-hero-image"');
+    expect(explicit.html).toContain("no suitable business logo or photograph was available");
+    const extracted = renderDemoWebsite({ ...business, services: [], businessProfile });
+    expect(extracted.html).toContain("Gate installation");
+    expect(extracted.html).not.toContain("Timber fencing");
+  });
+
+  it("escapes sourced facts and image descriptions at every HTML boundary", () => {
+    const businessProfile = profile();
+    businessProfile.address = '<img src=x onerror="alert(1)">';
+    businessProfile.description = '<script>sendEmails()</script>';
+    businessProfile.images = [{ ...image(), alt: '\" onerror=\"alert(1)\" <script>' }];
+    const result = renderDemoWebsite({ ...business, businessProfile });
+    expect(result.html).toContain("&lt;script&gt;sendEmails()&lt;/script&gt;");
+    expect(result.html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(result.html).toContain('alt="&quot; onerror=&quot;alert(1)&quot; &lt;script&gt;"');
+    expect(result.html).not.toContain("<script>");
+    expect(result.html).not.toMatch(/<img[^>]*\s+onerror="/);
+  });
+
+  it.each([
+    { dataUrl: "https://business.com/photo.png" },
+    { dataUrl: "data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9ImFsZXJ0KDEpIi8+", mime: "image/svg+xml" },
+    { dataUrl: `data:image/jpeg;base64,${png.toString("base64")}`, mime: "image/jpeg" },
+    { sha256: "0".repeat(64) },
+    { sourceUrl: "http://business.com/photo.png" },
+    { sourceUrl: "https://127.0.0.1/photo.png" },
+    { width: 100_000, height: 100_000 },
+    { dataUrl: `data:image/png;base64,${"A".repeat(2_800_001)}` },
+  ])("omits invalid, active, remote, private or oversized image payloads", invalid => {
+    const unsafe = { ...image(), ...invalid } as BusinessImage;
+    const result = renderDemoWebsite({ ...business, businessProfile: { ...profile(), logo: unsafe, images: [unsafe] } });
+    expect(result.html).not.toContain("<img ");
+    expect(result.html).toContain("Original illustration / Wulff Studio");
+    expect(result.externalAssets).toEqual([]);
+  });
+
+  it("changes the exact concept hash when its business imagery or sourced address changes", () => {
+    const original = profile();
+    const first = renderDemoWebsite({ ...business, businessProfile: original });
+    expect(renderDemoWebsite({ ...business, businessProfile: { ...original, address: "11 Sample Road, Berwick VIC 3806" } }).contentHash).not.toBe(first.contentHash);
+    expect(renderDemoWebsite({ ...business, businessProfile: { ...original, images: [] } }).contentHash).not.toBe(first.contentHash);
   });
 });

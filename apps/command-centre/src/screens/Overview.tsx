@@ -62,7 +62,7 @@ export function Overview({ status, approvalCount, onNavigate, onDataChanged }: {
           <Card className="jarvis-systems-card" label="01 / System connections" title="Your connected world" action={<RefreshButton onClick={onDataChanged} />}>
             {!status && <Loading label="Checking connections" />}
             {status && <div className="jarvis-system-list">{status.connections.map((c) => <details className="jarvis-system-detail" key={c.name}><summary><StateDot state={c.state} /><span>{CONNECTION_NAMES[c.name] ?? c.name}</span><span className={`jarvis-connection-state state-${c.state}`}>{stateLabel(c.state)}</span><ChevronDown size={11} aria-hidden /></summary><p>{c.detail}</p></details>)}</div>}
-            <p className="jarvis-systems-note">Connect a service to bring its real information into Jarvis.</p>
+            <p className="jarvis-systems-note">Connect a service to bring its real information into Jarvis.</p><button type="button" className="btn-ghost mt-3 text-xs" onClick={() => onNavigate("devices")}><Bell size={13} aria-hidden />Email & message updates</button>
           </Card>
           <div className="jarvis-decision-panel">
             <div className="hud-eyebrow"><Layers3 size={13} aria-hidden /> UP NEXT</div>

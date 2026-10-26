@@ -101,6 +101,17 @@ describe("background research", () => {
     expect(JSON.stringify(rt.atlas.deps.store.getMemory("background.lastRun"))).not.toContain("secret-not-for-memory");
   });
 
+  it("reports unavailable scheduled sources as partial while still preparing research and owner updates", async () => {
+    const rt = runtime();
+    vi.mocked(rt.atlas.runScheduledChecks).mockResolvedValue({ ran: ["jobs"], notifications: 0, failed: ["boxsafe.summary"] });
+    const updateTick = vi.spyOn(rt.ownerUpdates, "dailyTick").mockResolvedValue(undefined);
+    const run = await createBackgroundWorker(rt, enabled).tick();
+    expect(run.checks.state).toBe("partial");
+    expect(run.research.state).toBe("completed");
+    expect(run.state).toBe("partial");
+    expect(updateTick).toHaveBeenCalledOnce();
+  });
+
   it("records errors safely and never retries a failed provider call automatically", async () => {
     const rt = runtime();
     vi.mocked(rt.atlas.deps.research.find).mockRejectedValue(new Error("private-provider-token"));

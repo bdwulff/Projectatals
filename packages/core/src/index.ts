@@ -25,4 +25,5 @@ export { isPublicAddress } from "./adapters/live/website-checker.js";
 export * from "./acquisition/templates.js";
 export * from "./acquisition/demo-renderer.js";
 export * from "./acquisition/service.js";
+export * from "./acquisition/business-profile.js";
 export * from "./adapters/tavily.js";

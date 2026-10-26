@@ -3,6 +3,7 @@ import { Atlas, type ProspectCandidate } from "../src/orchestrator.js";
 import { SqliteStore } from "../src/store.js";
 import { FakeBoxSafeGateway, FakeMailer, FakeStripeGateway, FakeTelephony, FakeWebsiteChecker } from "../src/adapters/fake/index.js";
 import { AcquisitionService, type AcquisitionMailTransport, type AcquisitionOptions, type AcquisitionRecord } from "../src/acquisition/service.js";
+import { businessProfileSummary, type BusinessProfile } from "../src/acquisition/business-profile.js";
 
 const stores: SqliteStore[] = [];
 afterEach(() => { for (const store of stores.splice(0)) store.close(); vi.restoreAllMocks(); });
@@ -28,6 +29,58 @@ function rawDemo(record: AcquisitionRecord): string { return /\/demos\/([A-Za-z0
 function rawUnsub(record: AcquisitionRecord): string { return /\/unsubscribe\/([A-Za-z0-9_-]+)/.exec(record.draft!.text)![1]!; }
 
 describe("client acquisition domain", () => {
+  it("enriches facts before a private concept and invalidates every old demo/email approval hash", async () => {
+    const {service,options,atlas,store,send}=setup();
+    const old=service.prepare(add(service).id,{templateId:"folio"});
+    // Exercise the live enrichment branch with an injected fictional profile; no network adapter exists here.
+    options.mode="live";
+    const prospect=atlas.prospects.require(old.prospectId);prospect.fixture=false;store.upsertDoc("prospects",prospect.id,prospect);
+    const profile:BusinessProfile={state:"partial",detail:"Fictional adapter response",sourceUrl:old.website!,fetchedAt:"2026-10-26T05:00:00Z",description:"Fictional source description for the business",address:"1 Fictional Avenue, Berwick",phone:"(03) 0000 0000",services:["Fictional fallback service"],images:[],notices:["Fictional test profile"]};
+    const enrich=vi.fn(async()=>profile);options.enricher={enrich};
+    const current=await service.enrichAndPrepare(old.id);
+    expect(enrich).toHaveBeenCalledTimes(1);expect(current.businessProfile?.address).toBe(profile.address);
+    expect(current.demo?.templateId).toBe("folio");
+    expect(service.ownerPreview(current.demo!.id)?.html).toContain(profile.address!);
+    expect(current.demo!.htmlHash).not.toBe(old.demo!.htmlHash);expect(current.draft!.contentHash).not.toBe(old.draft!.contentHash);
+    expect(()=>service.publish(current.id,old.demo!.htmlHash,"Brandon")).toThrow(/demo changed/);
+    await expect(service.approveAndSend(current.id,old.draft!.contentHash,"Brandon")).rejects.toThrow(/version changed/);
+    await service.enrichAndPrepare(old.id);expect(enrich).toHaveBeenCalledTimes(1);
+    const refreshed=await service.enrichAndPrepare(old.id,{refresh:true});expect(enrich).toHaveBeenCalledTimes(2);expect(refreshed.demo?.templateId).toBe("folio");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("never fetches a real website for fictional mode and omits image bytes from dashboard summaries", async () => {
+    const {service,options}=setup();const enrich=vi.fn();options.enricher={enrich};
+    const lead=await service.enrichAndPrepare(add(service).id);
+    expect(enrich).not.toHaveBeenCalled();expect(lead.businessProfile?.state).toBe("fictional");
+    const image={dataUrl:"data:image/png;base64,fixture",sourceUrl:"https://business.example.test/logo.png",alt:"Fictional logo",mime:"image/png" as const,sha256:"a".repeat(64),width:96,height:96};
+    const summary=businessProfileSummary({state:"fictional",detail:"Fictional",sourceUrl:lead.website!,fetchedAt:"2026-10-26T05:00:00Z",services:[],logo:image,images:[image],notices:[]});
+    expect(JSON.stringify(summary)).not.toContain("dataUrl");expect(summary.logo?.sha256).toBe(image.sha256);
+  });
+
+  it("does not overwrite owner edits made while website enrichment is running", async () => {
+    const {service,options,atlas,store}=setup();const lead=service.prepare(add(service).id);
+    options.mode="live";const prospect=atlas.prospects.require(lead.prospectId);prospect.fixture=false;store.upsertDoc("prospects",prospect.id,prospect);
+    let finish!:(profile:BusinessProfile)=>void;options.enricher={enrich:()=>new Promise(resolve=>{finish=resolve;})};
+    const pending=service.enrichAndPrepare(lead.id);
+    service.saveDraft(lead.id,{expectedHash:lead.draft!.contentHash,subject:"Owner edited while source was loading",text:lead.draft!.text+"\nAn owner-written fictional note."});
+    finish({state:"partial",detail:"Fictional",sourceUrl:lead.website!,fetchedAt:"2026-10-26T05:00:00Z",address:"Stale fictional address",services:[],images:[],notices:[]});
+    await expect(pending).rejects.toThrow(/changed while/);
+    expect((await service.snapshot()).records[0]?.businessProfile).toBeUndefined();
+  });
+
+  it("binds mail provider selection to a new exact version while preserving the edited email", async () => {
+    const {service,options,send}=setup();let provider="gmail";options.mailProviderIdentity=()=>provider;
+    const initial=service.prepare(add(service).id);
+    const edited=service.saveDraft(initial.id,{expectedHash:initial.draft!.contentHash,subject:"A personal fictional subject",text:initial.draft!.text+"\nAn owner-written closing sentence."});
+    provider="resend";
+    await expect(service.approveAndSend(edited.id,edited.draft!.contentHash,"Brandon")).rejects.toThrow(/version changed/);
+    const updated=(await service.snapshot()).records[0]!;
+    expect(updated.draft!.contentHash).not.toBe(edited.draft!.contentHash);expect(updated.draft!.version).toBe(edited.draft!.version+1);
+    expect(updated.draft!.text).toBe(edited.draft!.text);expect(updated.draft!.subject).toBe(edited.draft!.subject);expect(updated.draft!.mailProviderIdentity).toBe("resend");
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("prepares real private artifacts and honest blockers without connected search, sender or contact", async () => {
     const { service, send } = setup({ connected: false });
     const lead = add(service);

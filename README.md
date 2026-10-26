@@ -105,6 +105,12 @@ Berwick` now prepares source-backed candidates, private concepts and email draft
 Free, rate-limited Tavily keyless search is the default; a configured Brave key
 can select that provider explicitly. `Look up ...` returns attributed excerpts.
 
+Concept preparation now checks the business's official website for its actual
+logo, photographs, description, address and phone. Captured raster images are
+embedded in the private concept with sources recorded; missing or restricted
+artwork is identified explicitly. Studio offers explicit Gmail or independent
+business-domain Resend sending, with no silent account fallback.
+
 Daily discovery can prepare concepts between conversations; it never approves
 contact or sends unseen messages. A verified Gmail OAuth or Resend connection,
 source-backed contact eligibility and exact owner approval are required to publish
@@ -132,6 +138,12 @@ server-side credentials, character caps and no automatic regeneration after
 ambiguous submissions. The browser/device voice is labelled separately. No cloud
 voice is connected until the owner's account key and voice ID are configured and
 verified. See `docs/ELEVENLABS-VOICE.md`.
+
+An automatic welcome uses the device's own voice once per sign-in, with no AI or
+ElevenLabs request. Choose its voice or disable it on that device. iPhone may need
+an initial tap. **Devices → Owner updates** adds optional email alerts, free
+Telegram messages and a morning summary. Connections and delivery preferences
+start disabled. See [BRANDING-AND-UPDATES.md](docs/BRANDING-AND-UPDATES.md).
 
 Build the Mac download after the dashboard production build:
 

@@ -4,7 +4,9 @@
  * ATLAS_MODE=fake forces fakes everywhere (default for local development).
  */
 import { AcquisitionService, Atlas, SqliteStore, fake, live, BraveResearchSource, TavilyResearchSource, type AcquisitionMailTransport, type AtlasDeps, type ProspectCandidate } from "@atlas/core";
-import { GmailAcquisitionMailTransport, ResendAcquisitionMailTransport } from "./acquisition-mail.js";
+import { GmailAcquisitionMailTransport, ResendAcquisitionMailTransport, SelectableAcquisitionMailTransport } from "./acquisition-mail.js";
+import { OwnerUpdates } from "./owner-updates.js";
+import { OfficialBusinessEnricher } from "./acquisition-assets.js";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -30,7 +32,7 @@ export function fixtureWebsiteTable() {
   };
 }
 
-export interface Runtime { atlas: Atlas; acquisition: AcquisitionService; googleMail: GmailAcquisitionMailTransport; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
+export interface Runtime { atlas: Atlas; acquisition: AcquisitionService; acquisitionMail: AcquisitionMailTransport; mailProviders: SelectableAcquisitionMailTransport; googleMail: GmailAcquisitionMailTransport; ownerUpdates: OwnerUpdates; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
 
 export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   const requestedMode = env.ATLAS_MODE ?? "fake";
@@ -71,7 +73,10 @@ export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   const atlas = new Atlas(deps);
   const googleMail = new GmailAcquisitionMailTransport({ clientId: forceFake ? undefined : env.GOOGLE_CLIENT_ID, clientSecret: forceFake ? undefined : env.GOOGLE_CLIENT_SECRET, publicOrigin: env.ATLAS_PUBLIC_ORIGIN, ownerAccessKey: env.ATLAS_OWNER_ACCESS_KEY, store });
   const fictionalMailer: AcquisitionMailTransport = { status: async () => ({ state: "fake", provider: "Fictional mailer", detail: "Fictional mode records test emails locally; no provider is contacted.", sender: "hello@wulffstudio.example.test" }), send: input => fakes.mailer.send(input) };
-  const acquisitionMailer = forceFake ? fictionalMailer : env.RESEND_API_KEY?.trim() ? new ResendAcquisitionMailTransport({ apiKey: env.RESEND_API_KEY, fromAddress: env.ATLAS_OUTREACH_FROM, store }) : googleMail;
-  const acquisition = new AcquisitionService(atlas, { mode: forceFake ? "fake" : "live", publicOrigin: env.ATLAS_PUBLIC_ORIGIN, mailer: acquisitionMailer, fromAddress: env.ATLAS_OUTREACH_FROM ?? "", senderName: env.ATLAS_OUTREACH_SENDER_NAME ?? "Brandon Wulff", organisation: "Wulff Studio", contactDetails: env.ATLAS_OUTREACH_CONTACT, maxSendsPerDay: 5 });
-  return { atlas, acquisition, googleMail, mode: forceFake ? "fake" : "live", fakes };
+  const mailProviders = new SelectableAcquisitionMailTransport({ store, defaultProvider: env.ATLAS_OUTREACH_PROVIDER, transports: { gmail: forceFake ? fictionalMailer : googleMail, resend: forceFake ? fictionalMailer : new ResendAcquisitionMailTransport({ apiKey: env.RESEND_API_KEY, fromAddress: env.ATLAS_OUTREACH_FROM, store }) } });
+  const acquisitionMail = forceFake ? fictionalMailer : mailProviders;
+  const acquisition = new AcquisitionService(atlas, { mode: forceFake ? "fake" : "live", publicOrigin: env.ATLAS_PUBLIC_ORIGIN, mailer: acquisitionMail, mailProviderIdentity: () => forceFake ? "fictional" : mailProviders.selected() ?? "invalid", enricher: forceFake ? undefined : new OfficialBusinessEnricher(), fromAddress: env.ATLAS_OUTREACH_FROM ?? "", senderName: env.ATLAS_OUTREACH_SENDER_NAME ?? "Brandon Wulff", organisation: "Wulff Studio", contactDetails: env.ATLAS_OUTREACH_CONTACT, maxSendsPerDay: 5 });
+  const ownerUpdates = new OwnerUpdates({ atlas, mode: forceFake ? "fake" : "live", mailer: acquisitionMail, publicOrigin: env.ATLAS_PUBLIC_ORIGIN, ownerAccessKey: env.ATLAS_OWNER_ACCESS_KEY, telegramToken: forceFake ? undefined : env.TELEGRAM_BOT_TOKEN, telegramChatId: forceFake ? undefined : env.TELEGRAM_OWNER_CHAT_ID, counts: async () => { const snapshot = await acquisition.snapshot(); return { candidates: snapshot.records.length, concepts: snapshot.records.filter(r => r.demo).length, pendingReview: snapshot.records.filter(r => r.draft && ["draft", "blocked", "awaiting_approval"].includes(r.draft.status)).length }; } });
+  for (const notifier of ownerUpdates.notifiers()) atlas.notifications.use(notifier);
+  return { atlas, acquisition, acquisitionMail, mailProviders, googleMail, ownerUpdates, mode: forceFake ? "fake" : "live", fakes };
 }

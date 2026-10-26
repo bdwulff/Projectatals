@@ -172,3 +172,33 @@
 .acq-google-help p code { color: #b2d4e0; font-size: 9px; overflow-wrap: anywhere; }
 .acq-google-callback { display: block; color: #accdda; background: #061016; border: 1px solid #2a4553; border-radius: 4px; padding: 12px; margin-top: 9px; font-size: 9px; line-height: 1.8; overflow-wrap: anywhere; }
 @media (max-width: 680px) { .acq-google-link { align-items: flex-start; flex-direction: column; } }
+
+.acq-mail-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 17px; }
+.acq-mail-choice { display: flex; flex-direction: column; gap: 12px; min-width: 0; text-align: left; border: 1px solid #2d4857; border-radius: 6px; padding: 17px; background: #08131b; color: #87a4b4; font-size: 11px; line-height: 1.8; cursor: pointer; }
+.acq-mail-choice[aria-pressed=true] { border-color: #78bac8; background: #112c36; }
+.acq-mail-choice:disabled { opacity: .5; cursor: not-allowed; }
+.acq-mail-choice-top { display: flex; align-items: center; gap: 9px; color: #c8e5ec; }
+.acq-mail-choice-top strong { flex: 1; font-weight: 500; }
+.acq-provider-steps { color: #a1becc; list-style: decimal; padding-left: 20px; font-size: 10px; line-height: 1.9; margin: 13px 0; }
+.acq-provider-steps li + li { margin-top: 5px; }
+@media(max-width:680px) { .acq-mail-choices { grid-template-columns:minmax(0,1fr); } }
+
+.acq-business-profile { border: 1px solid #365361; background: linear-gradient(130deg,#13283288,#0b182155); padding: 17px; border-radius: 6px; margin-bottom: 24px; min-width: 0; }
+.acq-profile-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.acq-profile-heading h3 { color: #cbe2ea; font-size: 13px; font-weight: 400; margin-top: 9px; line-height: 1.6; }
+.acq-profile-heading .acq-btn { flex-shrink: 0; font-size: 10px; }
+.acq-profile-detail { color: #8da9b7; font-size: 10px; line-height: 1.85; margin-top: 11px; }
+.acq-profile-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.acq-profile-fact { display: flex; align-items: center; gap: 7px; padding: 8px 9px; border-radius: 4px; background: #07121b; color: #809cac; font-size: 9px; line-height: 1.7; overflow-wrap: anywhere; min-width: 0; }
+.acq-profile-fact strong { font-weight: 400; }
+.acq-profile-fact > svg { flex-shrink: 0; }
+.acq-profile-fact--found { color: #a3d8c7; background: #142e2d; }
+.acq-profile-description { color: #a0becd; font-size: 11px; line-height: 1.9; margin-top: 14px; }
+.acq-profile-sources { margin-top: 14px; border-top: 1px solid #2d4955; padding-top: 12px; }
+.acq-profile-sources summary { display: flex; align-items: center; gap: 8px; color: #91b6c7; font-size: 10px; }
+.acq-profile-sources p, .acq-profile-sources li { font-size: 9px; color: #7695a5; line-height: 1.9; margin-top: 9px; overflow-wrap: anywhere; }
+.acq-profile-sources ul { display: flex; flex-direction: column; gap: 3px; }
+.acq-profile-sources li { display: flex; justify-content: space-between; gap: 10px; margin-top: 5px; }
+.acq-profile-sources a { display: inline-flex; align-items: center; gap: 4px; }
+.acq-profile-notices li { display: list-item; margin-left: 12px; list-style: disc; }
+@media(max-width:680px) { .acq-business-profile { padding: 14px; } .acq-profile-heading { align-items: flex-start; flex-direction: column; } .acq-profile-heading .acq-btn { width: 100%; } }

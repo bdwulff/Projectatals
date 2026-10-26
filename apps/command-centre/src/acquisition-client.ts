@@ -11,6 +11,12 @@ export interface AcquisitionTemplate {
   attribution: string;
 }
 export interface AcquisitionConnection { state: "connected" | "not_connected" | "error" | "fake"; provider: string; detail: string }
+export type AcquisitionMailProviderId = "gmail" | "resend";
+export interface AcquisitionMailProvider {
+  id: AcquisitionMailProviderId; name: string; description: string; requiredSettings: string[];
+  setupSteps: string[]; notes: string[]; selected: boolean; status: AcquisitionConnection;
+}
+export interface AcquisitionMailProviders { selected: AcquisitionMailProviderId | null; providers: AcquisitionMailProvider[] }
 export interface AcquisitionSender { name: string; organisation: string; email: string; contactDetails: string; ready: boolean; detail: string }
 export type ContactBasis = "none_established" | "express_consent" | "existing_relationship" | "inferred_consent_business";
 export interface AcquisitionContact {
@@ -26,9 +32,19 @@ export interface AcquisitionDraft {
   id: string; version: number; from: string; to: string; subject: string; text: string;
   contentHash: string; status: OutreachStatus; blockers: string[]; approvalId?: string; providerRef?: string; acceptedAt?: string;
 }
+export interface AcquisitionBusinessImage {
+  sourceUrl: string; alt: string; mime: "image/png" | "image/jpeg" | "image/webp";
+  sha256: string; width: number; height: number;
+}
+export interface AcquisitionBusinessProfile {
+  state: "ready" | "partial" | "unavailable" | "fictional"; detail: string; sourceUrl: string; fetchedAt: string;
+  description?: string; address?: string; phone?: string; services: string[]; notices: string[];
+  logo?: AcquisitionBusinessImage; images: AcquisitionBusinessImage[];
+}
 export interface AcquisitionRecord {
   id: string; prospectId: string; businessName: string; location: string; industry: string; website: string | null;
   sourceUrl: string; observation: string; services: string[]; createdAt: string; updatedAt: string;
+  businessProfile?: AcquisitionBusinessProfile;
   contact: AcquisitionContact | null; demo: AcquisitionDemo | null; draft: AcquisitionDraft | null;
 }
 export interface AcquisitionSnapshot {
@@ -59,8 +75,11 @@ const leadPath = (id: string) => `/leads/${encodeURIComponent(id)}`;
 export const acquisition = {
   snapshot: () => request<AcquisitionSnapshot>(""),
   googleLink: () => request<{ url: string }>("/google/link", {}),
+  mailProviders: () => request<AcquisitionMailProviders>("/mail/providers"),
+  selectMailProvider: (provider: AcquisitionMailProviderId) => request<AcquisitionSnapshot>("/mail/provider", { provider }),
   discover: (input: { area: string; industry?: string; count: number }) => request<AcquisitionSnapshot>("/discover", input),
   addLead: (input: AddAcquisitionLead) => request<AcquisitionSnapshot>("/leads", input),
+  enrich: (id: string) => request<AcquisitionSnapshot>(`${leadPath(id)}/enrich`, { refresh: true }),
   prepare: (id: string, templateId?: DemoTemplateId) => request<AcquisitionSnapshot>(`${leadPath(id)}/prepare`, templateId ? { templateId } : {}),
   saveContact: (id: string, contact: Omit<AcquisitionContact, "reviewedBy" | "reviewedAt">) => request<AcquisitionSnapshot>(`${leadPath(id)}/contact`, contact),
   saveSender: (sender: Pick<AcquisitionSender, "name" | "organisation" | "email" | "contactDetails">) => request<AcquisitionSnapshot>("/sender", sender),

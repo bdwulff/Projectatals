@@ -98,7 +98,7 @@ export function createBackgroundWorker(rt: Runtime, env: NodeJS.ProcessEnv = pro
       store.setMemory("background.lastRun", run);
       try {
         const checks = await rt.atlas.runScheduledChecks();
-        const errors = "errors" in checks && Array.isArray(checks.errors) ? checks.errors.length : 0;
+        const errors = Array.isArray(checks.failed) ? checks.failed.length : 0;
         run.checks = errors > 0 ? { state: "partial", detail: `${errors} scheduled check${errors === 1 ? "" : "s"} unavailable; research is evaluated independently.` } : { state: "completed", detail: "Scheduled checks completed." };
       } catch {
         run.checks = { state: "failed", detail: "Scheduled checks failed; research is evaluated independently." };
@@ -125,6 +125,7 @@ export function createBackgroundWorker(rt: Runtime, env: NodeJS.ProcessEnv = pro
           run.research = { state: job.status === "running" ? "running" : "queued", detail: job.status === "running" ? "Research was started; an interrupted request is not repeated automatically." : "Daily research is queued in the persistent job queue.", jobId: job.id };
         }
       }
+      try { await rt.ownerUpdates.dailyTick(); } catch { store.setMemory("ownerUpdates.workerError", { at: clock().toISOString(), detail: "Owner update processing could not finish. Check its connection status." }); }
       run.state = [run.checks.state, run.research.state].some((state) => ["failed", "partial", "blocked", "queued", "running"].includes(state)) ? "partial" : "completed";
       run.finishedAt = clock().toISOString();
       store.setMemory("background.lastRun", run);

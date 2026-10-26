@@ -18,11 +18,27 @@ afterEach(() => { runtimes.splice(0).forEach(rt => rt.atlas.deps.store.close());
 describe("private acquisition and scoped public concepts", () => {
   it("protects owner records, HTML previews, mutations and OAuth initiation", async () => {
     const s = await setup();
-    for (const path of ["/api/acquisition", "/api/acquisition/demos/unknown/preview", "/api/acquisition/google/setup"]) expect((await s.app.request(origin + path)).status).toBe(401);
+    for (const path of ["/api/acquisition", "/api/acquisition/demos/unknown/preview", "/api/acquisition/google/setup", "/api/acquisition/mail/providers", "/api/acquisition/mail/setup?provider=resend", "/api/owner-updates"]) expect((await s.app.request(origin + path)).status).toBe(401);
     expect((await s.app.request(origin + "/api/acquisition/leads", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(leadInput) })).status).toBe(401);
     expect((await s.app.request(origin + "/api/acquisition/google/link", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: "{}" })).status).toBe(401);
     expect((await s.app.request(origin + "/api/acquisition/leads", { method: "POST", headers: { Cookie: s.cookie, "Content-Type": "application/json" }, body: JSON.stringify(leadInput) })).status).toBe(403);
     expect((await s.app.request(origin + "/integrations/google/callback?code=forged&state=forged")).status).toBe(403);
+  });
+  it("allows explicit non-Google sender selection and private branding preparation without sending", async () => {
+    const s = await setup(); const request = vi.fn().mockRejectedValue(new Error("No provider call expected")); vi.stubGlobal("fetch", request);
+    const catalogue = await (await s.get("/api/acquisition/mail/providers")).json();
+    expect(catalogue.selected).toBe("gmail"); expect(catalogue.providers.map((p: any) => p.id)).toContain("resend");
+    expect((await s.post("/api/acquisition/mail/provider", { provider: "resend" })).status).toBe(200);
+    expect(s.rt.mailProviders.selected()).toBe("resend");
+    expect((await s.post("/api/acquisition/mail/provider", { provider: "smtp", token: "not-accepted" })).status).toBe(400);
+    const record = await prepare(s);
+    const enriched = await s.post(`/api/acquisition/leads/${record.id}/enrich`, { refresh: true });
+    expect(enriched.status).toBe(200); const next = (await enriched.json()).records[0];
+    expect(next.demo.publicPath).toBeNull(); expect(next.contact.basis).toBe("none_established");
+    expect((await s.post(`/api/acquisition/leads/${record.id}/enrich`, { refresh: "yes", approved: true })).status).toBe(400);
+    const guide = await s.get("/api/acquisition/mail/setup?provider=resend"); expect(guide.status).toBe(200); expect(await guide.text()).toContain("RESEND_API_KEY");
+    const updates = await (await s.get("/api/owner-updates")).json(); expect(updates.settings.emailEnabled).toBe(false); expect(updates.settings.messageEnabled).toBe(false);
+    expect(s.rt.fakes.mailer.sent).toHaveLength(0); expect(request).not.toHaveBeenCalled();
   });
   it("prepares private real HTML and drafts while sender is disconnected, without publish or send", async () => {
     const s = await setup(); const record = await prepare(s);

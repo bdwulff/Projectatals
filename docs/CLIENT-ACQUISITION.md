@@ -102,8 +102,9 @@ account, domain or subscription was purchased by this implementation.
 
 The bundled pages are original Wulff Studio implementations with original SVG
 artwork. They use three deliberately distinct visual directions and credit these
-commercial-use MIT references. No upstream code, demo photos, logos, testimonials
-or customer copy is embedded.
+commercial-use MIT references. No upstream template code, template demo photos,
+logos, testimonials or customer copy is embedded. Business artwork is now sourced
+separately from the prospect’s official website as described below.
 
 | Direction | Use | Verified free reference |
 | --- | --- | --- |
@@ -113,7 +114,8 @@ or customer copy is embedded.
 
 Reference licences were checked on26October2026. If upstream code is later copied,
 its copyright and licence notices must be retained; third-party imagery/font
-rights require separate checking. The renderer currently avoids those assets.
+rights require separate checking. Captured business artwork carries its own
+source/reuse notice; a template licence does not grant rights to that artwork.
 
 ## Validation and limits
 
@@ -124,7 +126,7 @@ provider IDs. Browser checks use clearly fictional records and intercept all
 provider traffic. They verify actual sandbox/CSP rendering and do not establish
 a live Gmail/Resend connection. Production connection status remains authoritative.
 
-Release validation passed250 workspace tests, the production build, workspace
+The preceding acquisition release validation passed250 workspace tests, the production build, workspace
 typechecks and157 browser checks at1440/390/320px. The renderer additionally passed
 nine isolated layout renders. The free keyless endpoint returned real local
 business results during a read-only verification. No email was sent in testing.
@@ -133,3 +135,15 @@ The A$300 experimentation ceiling is unchanged. New accounts/subscriptions,
 mailbox identity, contact eligibility and exact outgoing messages have not been
 approved merely by preparing this workflow. Current hosting usage and provider
 bills are not automatically reconciled into the app's recorded budget.
+
+## Business branding and additional sending options
+
+Concept preparation now checks the business's official website for usable logos,
+photographs and sourced business/location details, with explicit refresh,
+provenance and honest missing-asset fallbacks. Artwork remains subject to reuse
+rights; an explicit copying restriction stops artwork downloads. The three
+layouts remain original code, with any captured business images embedded in the
+exact reviewed concept. Sender settings now explicitly selects Gmail or a
+verified business-domain Resend connection. See [Business branding, greetings
+and owner updates](BRANDING-AND-UPDATES.md) for setup, automatic device voice,
+owner email/Telegram updates and the remaining account requirements.

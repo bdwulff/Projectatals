@@ -4,6 +4,7 @@ import type { Store, StoredJob } from "@atlas/core";
 export interface AcquisitionMailInput {
   from: string; to: string; subject: string; text: string;
   approvalId: string; idempotencyKey: string; unsubscribeUrl: string;
+  purpose?: "outreach" | "owner_update";
 }
 export interface AcquisitionMailStatus {
   state: "connected" | "not_connected" | "error" | "fake";
@@ -14,6 +15,101 @@ export interface AcquisitionMailTransport {
   status(): Promise<AcquisitionMailStatus>;
   send(input: AcquisitionMailInput): Promise<AcquisitionMailResult>;
 }
+export type AcquisitionMailProvider = "gmail" | "resend";
+export interface AcquisitionMailProviderInfo {
+  id: AcquisitionMailProvider;
+  name: string;
+  description: string;
+  requiredSettings: readonly string[];
+  setupSteps: readonly string[];
+  notes: readonly string[];
+}
+/** Public setup guidance only. Credentials are configured privately in Railway, never in a browser payload. */
+export const ACQUISITION_MAIL_PROVIDERS: readonly AcquisitionMailProviderInfo[] = [
+  {
+    id: "resend", name: "Own business email · Resend",
+    description: "Send from a verified domain you own, with replies arriving at your existing mailbox. Its inbox can be hosted by Microsoft 365, Fastmail, Zoho or another provider.",
+    requiredSettings: ["RESEND_API_KEY", "ATLAS_OUTREACH_FROM"],
+    setupSteps: [
+      "Use a domain you already own. Resend cannot authorise sending as an unrelated gmail.com, outlook.com, icloud.com or other provider-owned address.",
+      "In Resend, add the exact sender domain and add its displayed DNS verification records at your domain host. Wait until the domain status is Verified.",
+      "Create a Resend API key that can read verified domains and send email. Save it privately as RESEND_API_KEY in the existing Jarvis Railway service.",
+      "Set ATLAS_OUTREACH_FROM to the exact address to send as, such as hello@your-business-domain. Use an existing working inbox so replies reach you.",
+      "Deploy the pending Railway variable changes, select Resend in Jarvis, then check the sender status and matching sender profile.",
+    ],
+    notes: [
+      "Resend handles outbound sending; it does not create or read your mailbox.",
+      "Recipients may use any email provider. Gmail and Google sign-in are not required for this connection.",
+      "Setup checks read the provider's verified-domain list; they do not send an email. Every prospect email still needs its exact owner approval.",
+      "An existing domain, DNS access and a Resend account are required. No subscription or domain purchase is made by Jarvis. Check the provider's current free-plan limits and charges before enabling sends.",
+    ],
+  },
+  {
+    id: "gmail", name: "Google mailbox · Gmail API",
+    description: "Send from the exact Gmail or Google Workspace address you link through Google sign-in.",
+    requiredSettings: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    setupSteps: [
+      "Create the Google web OAuth client using the Google connection setup guide in Jarvis and save its client settings privately in Railway.",
+      "Choose Connect Gmail and sign in to the intended sender account. Linking does not send any email.",
+      "Use the verified address in the sender profile. Recipients may use Gmail, Outlook, business email or any other provider.",
+    ],
+    notes: [
+      "The hosted Jarvis connection is separate from ChatGPT's Gmail connector.",
+      "Only the linked address is authorised. A testing-mode Google app may require relinking after seven days.",
+    ],
+  },
+];
+export interface SelectableAcquisitionMailConfig {
+  store: Store;
+  transports: Record<AcquisitionMailProvider, AcquisitionMailTransport>;
+  defaultProvider?: string;
+}
+/** Explicit owner selection, with no credential-based or failed-provider fallback. */
+export class SelectableAcquisitionMailTransport implements AcquisitionMailTransport {
+  private activeSends = 0;
+  private epoch = 0;
+  constructor(private readonly config: SelectableAcquisitionMailConfig) {}
+  selected(): AcquisitionMailProvider | null {
+    const saved = this.config.store.getMemory<unknown>("acquisition.mail.provider");
+    const value = saved ?? this.config.defaultProvider ?? "gmail";
+    return value === "gmail" || value === "resend" ? value : null;
+  }
+  /** Owner-authenticated settings route only. Selection does not authorise an email. */
+  select(provider: unknown): AcquisitionMailProvider {
+    if (provider !== "gmail" && provider !== "resend") throw new AcquisitionMailError("invalid_request", "Choose Gmail or Resend as the sending connection.");
+    if (this.activeSends > 0) throw new AcquisitionMailError("unavailable", "An email submission is in progress. Wait for its recorded outcome before changing the sending connection.");
+    this.config.store.setMemory("acquisition.mail.provider", provider);
+    this.epoch++;
+    return provider;
+  }
+  async providers(): Promise<{ selected: AcquisitionMailProvider | null; providers: Array<AcquisitionMailProviderInfo & { selected: boolean; status: AcquisitionMailStatus }> }> {
+    const selected = this.selected();
+    const providers = await Promise.all(ACQUISITION_MAIL_PROVIDERS.map(async info => ({ ...info, selected: info.id === selected, status: await this.providerStatus(info.id) })));
+    return { selected, providers };
+  }
+  private async providerStatus(provider: AcquisitionMailProvider): Promise<AcquisitionMailStatus> {
+    try { return await this.config.transports[provider].status(); }
+    catch { return { state: "error", provider: provider === "resend" ? "Resend" : "Gmail API", detail: "The sending connection could not be checked. No fallback connection was selected." }; }
+  }
+  async status(): Promise<AcquisitionMailStatus> {
+    const selected = this.selected(), epoch = this.epoch;
+    if (!selected) return { state: "error", provider: "Email", detail: "The saved sending connection is invalid. Select Gmail or Resend in Jarvis; no automatic fallback will be used." };
+    const status = await this.providerStatus(selected);
+    if (epoch !== this.epoch || selected !== this.selected()) return { state: "error", provider: "Email", detail: "The sending connection changed during verification. Check its current status before sending." };
+    return status;
+  }
+  async send(input: AcquisitionMailInput): Promise<AcquisitionMailResult> {
+    validateMail(input);
+    const selected = this.selected();
+    if (!selected) throw new AcquisitionMailError("not_configured", "Select an authorised sending connection first.");
+    // Reserve selection synchronously before the provider's first asynchronous check.
+    // A changed account never receives the payload midway through a submission.
+    this.activeSends++;
+    try { return await this.config.transports[selected].send(input); }
+    finally { this.activeSends--; }
+  }
+}
+
 export class AcquisitionMailError extends Error {
   constructor(public readonly code: "not_configured" | "invalid_request" | "unavailable" | "sender_mismatch" | "oauth_state" | "uncertain", message: string) {
     super(message); this.name = "AcquisitionMailError";
@@ -53,6 +149,7 @@ function publicOrigin(value: string | undefined): string | null {
   } catch { return null; }
 }
 function validateMail(input: AcquisitionMailInput): void {
+  if (input?.purpose !== undefined && input.purpose !== "outreach" && input.purpose !== "owner_update") throw new AcquisitionMailError("invalid_request", "Unsupported email purpose.");
   if (!input || !emailAddress(input.from) || !emailAddress(input.to)) throw new AcquisitionMailError("invalid_request", "Provide one valid sender and one recipient email address.");
   if (typeof input.subject !== "string" || !input.subject.trim() || input.subject.length > 240 || /[\x00-\x1f\x7f]/.test(input.subject)) throw new AcquisitionMailError("invalid_request", "Email subject is empty, too long or contains unsafe header characters.");
   if (typeof input.text !== "string" || !input.text.trim() || input.text.length > 25_000 || Buffer.byteLength(input.text) > 80_000 || /[\x00\x08\x0b\x0c\x0e-\x1f\x7f]/.test(input.text)) throw new AcquisitionMailError("invalid_request", "Email text is empty, too long or contains unsupported control characters.");
@@ -103,7 +200,7 @@ class SubmissionJournal {
   constructor(private readonly provider: string, private readonly store: Store | undefined, private readonly now: () => Date) {}
   reserve(input: AcquisitionMailInput): { job: StoredJob; previous?: AcquisitionMailResult } {
     const key = `acquisition-mail:${this.provider}:${hash(input.idempotencyKey)}`;
-    const payloadHash = hash(JSON.stringify([input.from, input.to, input.subject, input.text, input.approvalId, input.idempotencyKey, input.unsubscribeUrl]));
+    const payloadHash = hash(JSON.stringify([input.from, input.to, input.subject, input.text, input.approvalId, input.idempotencyKey, input.unsubscribeUrl, input.purpose ?? "outreach"]));
     const prior = this.store?.getJobByKey(key) ?? this.memory.get(key);
     if (prior) return { job: prior, previous: this.previous(prior, payloadHash) };
     const at = this.now().toISOString();
@@ -146,7 +243,7 @@ export class ResendAcquisitionMailTransport implements AcquisitionMailTransport 
       const body = await boundedJson("https://api.resend.com/domains", { method: "GET", headers: { Authorization: `Bearer ${this.config.apiKey}`, Accept: "application/json" } }, this.config);
       const domain = this.config.fromAddress!.split("@")[1]!.toLowerCase();
       if (!Array.isArray(body.data) || body.data.length > 1000) throw new Error();
-      const verified = body.data.some(item => item && typeof item === "object" && (item as { name?: unknown }).name === domain && (item as { status?: unknown }).status === "verified");
+      const verified = body.data.some(item => item && typeof item === "object" && typeof (item as { name?: unknown }).name === "string" && ((item as { name: string }).name).toLowerCase() === domain && (item as { status?: unknown }).status === "verified");
       value = verified ? { state: "connected", provider: "Resend", sender: this.config.fromAddress!, detail: "The sender domain is verified by Resend. Acceptance is recorded only after a send returns a provider ID." }
         : { state: "not_connected", provider: "Resend", detail: "The exact sender domain was not found as verified in the bounded domain listing. Check domain verification and key permissions." };
     } catch { value = { state: "error", provider: "Resend", detail: "Resend domain verification failed. Check domain-read permissions and credentials; sensitive details withheld." }; }
@@ -159,7 +256,7 @@ export class ResendAcquisitionMailTransport implements AcquisitionMailTransport 
     if ((await this.status()).state !== "connected") throw new AcquisitionMailError("unavailable", "The Resend sender domain is not verified.");
     const reservation = this.journal.reserve(input); if (reservation.previous) return reservation.previous;
     try {
-      const body = await boundedJson("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${this.config.apiKey}`, "Content-Type": "application/json", "Idempotency-Key": input.idempotencyKey }, body: JSON.stringify({ from: input.from, to: [input.to], subject: input.subject, text: input.text, headers: { "List-Unsubscribe": `<${input.unsubscribeUrl}>` } }) }, this.config);
+      const body = await boundedJson("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${this.config.apiKey}`, "Content-Type": "application/json", "Idempotency-Key": input.idempotencyKey }, body: JSON.stringify({ from: input.from, to: [input.to], subject: input.subject, text: input.text, headers: input.purpose === "owner_update" ? {} : { "List-Unsubscribe": `<${input.unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } }) }, this.config);
       if (!providerId(body.id)) throw new AcquisitionMailError("uncertain", "Resend did not return a valid provider ID; the submission requires review.");
       const result = { providerRef: body.id, acceptedAt: this.now().toISOString() }; this.journal.finish(reservation.job, result); return result;
     } catch { this.journal.finish(reservation.job, null); throw new AcquisitionMailError("uncertain", "Email submission failed or its outcome is unknown. No automatic retry was made."); }
@@ -314,5 +411,5 @@ function encodedSubject(subject: string): string {
 function mimeMessage(input: AcquisitionMailInput): Buffer {
   const domain = input.from.split("@")[1]!;
   const body = Buffer.from(input.text.replace(/\r\n|\r|\n/g, "\r\n"), "utf8").toString("base64").match(/.{1,76}/g)?.join("\r\n") ?? "";
-  return Buffer.from([`From: ${input.from}`, `To: ${input.to}`, `Subject: ${encodedSubject(input.subject)}`, `Message-ID: <${hash(input.idempotencyKey)}@${domain}>`, "MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", `List-Unsubscribe: <${input.unsubscribeUrl}>`, "", body, ""].join("\r\n"), "utf8");
+  return Buffer.from([`From: ${input.from}`, `To: ${input.to}`, `Subject: ${encodedSubject(input.subject)}`, `Message-ID: <${hash(input.idempotencyKey)}@${domain}>`, "MIME-Version: 1.0", 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", ...(input.purpose === "owner_update" ? [] : [`List-Unsubscribe: <${input.unsubscribeUrl}>`, "List-Unsubscribe-Post: List-Unsubscribe=One-Click"]), "", body, ""].join("\r\n"), "utf8");
 }
