@@ -285,4 +285,49 @@ describe("client acquisition domain", () => {
     expect(snapshot.records[0]?.draft?.text).toContain(sender.email);
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("archives false candidates without deleting their source evidence, and revokes all private/public previews", async () => {
+    const { service, store, atlas, send } = setup();
+    const first = service.prepare(add(service).id), firstRaw = rawDemo(first), unsubscribeRaw = rawUnsub(first);
+    service.publish(first.id, first.demo!.htmlHash, "Brandon");
+    const second = service.prepare(first.id), secondRaw = rawDemo(second);
+    service.publish(second.id, second.demo!.htmlHash, "Brandon");
+    const evidenceBefore = atlas.prospects.require(first.prospectId).evidence;
+    service.archive(first.id, "Search result was a newspaper collection, not a local business.", "Brandon");
+    service.archive(first.id, "Repeated archive request", "Brandon");
+    expect((await service.snapshot()).records).toHaveLength(0);
+    expect(service.publicPreview(firstRaw)).toBeNull();
+    expect(service.publicPreview(secondRaw)).toBeNull();
+    expect(service.ownerPreview(first.demo!.id)).toBeNull();
+    expect(service.ownerPreview(second.demo!.id)).toBeNull();
+    const stored = store.getDoc<AcquisitionRecord>("acquisition_records", first.id)!.doc;
+    expect(stored.archivedAt).toBeTruthy();
+    expect(stored.archiveReason).toContain("newspaper collection");
+    expect(stored.draft?.status).toBe("cancelled");
+    expect(store.getDoc("acquisition_demos", first.demo!.id)).not.toBeNull();
+    expect(atlas.prospects.require(first.prospectId).evidence).toEqual(evidenceBefore);
+    expect(atlas.audit.recent(100).filter(entry => entry.action === "acquisition.lead.archived")).toHaveLength(1);
+    expect(() => add(service)).toThrow(/lead is archived/);
+    expect(() => service.prepare(first.id)).toThrow(/lead is archived/);
+    // Opt-out must still act on retained archived contact records.
+    expect(service.unsubscribe(unsubscribeRaw)).toBe(true);
+    expect(atlas.prospects.require(first.prospectId).contactEligibility.suppressed).toBe(true);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("cancels queued outreach when its lead is archived and never resurrects it during discovery", async () => {
+    const candidate: ProspectCandidate = { businessName: "Example Fencing 1 (fictional)", location: "Berwick, Victoria", website: "https://business1.example.test", industry: "Fencing trades", observations: [{ observation: "Fictional retained source result", sourceUrl: "https://business1.example.test/contact", method: "search_result", status: "unverified" }], commercialOpportunity: "Not established", recommendedScope: "Needs review", internalRecommendedPriceAud: null, fixture: true };
+    const { service, atlas, send } = setup({ candidates: [candidate] });
+    const record = eligible(service, service.prepare(add(service).id));
+    vi.spyOn(atlas.jobs, "runOnce").mockResolvedValueOnce([]);
+    expect((await service.approveAndSend(record.id, record.draft!.contentHash, "Brandon")).draft?.status).toBe("queued");
+    service.archive(record.id, "Comparison page is outside the intended local business scope.", "Brandon");
+    await atlas.jobs.runOnce();
+    expect(send).not.toHaveBeenCalled();
+    expect(atlas.jobs.list()[0]?.result).toEqual({ status: "cancelled" });
+    expect(await service.discover({ area: "Berwick", count: 1 })).toEqual([]);
+    expect((await service.snapshot()).records).toEqual([]);
+    await expect(service.approveAndSend(record.id, record.draft!.contentHash, "Brandon")).rejects.toThrow(/lead is archived/);
+    expect(service.publicPreview(rawDemo(record))).toBeNull();
+  });
 });

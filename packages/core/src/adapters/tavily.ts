@@ -5,7 +5,14 @@ import { ResearchUnavailableError, type ResearchLookupInput, type ResearchLookup
 import { isPublicAddress } from "./live/website-checker.js";
 
 const ENDPOINT = "https://api.tavily.com/search";
-const DIRECTORY_HOSTS = /(^|\.)(facebook\.com|instagram\.com|linkedin\.com|youtube\.com|mapquest\.com|yellowpages\.com\.au|truelocal\.com\.au|yelp\.com|wikipedia\.org|hipages\.com\.au|oneflare\.com\.au)$/i;
+const EXCLUDED_HOSTS = ["facebook.com", "instagram.com", "linkedin.com", "youtube.com", "mapquest.com", "yellowpages.com.au", "truelocal.com.au", "yelp.com", "wikipedia.org", "hipages.com.au", "oneflare.com.au", "canstar.com.au", "dindi.com.au", "seek.com.au", "indeed.com", "localsearch.com.au", "australia247.info", "tripadvisor.com.au", "mindbodyonline.com", "classpass.com", "keepactive.com.au", "crossfit.com", "snapfitness.com", "anytimefitness.com", "bodyfittraining.com", "fitnessfirst.com.au", "goodlife.com.au", "jetts.com.au"];
+const DIRECTORY_HOSTS = new RegExp(`(^|\\.)(${EXCLUDED_HOSTS.map(host => host.replace(/\./g, "\\.")).join("|")})$`, "i");
+const SECTORS = [
+  { label: "fencing", pattern: /\bfenc\w*|\bgates?\b/i },
+  { label: "plumbing", pattern: /\bplumb\w*|\bdrain\w*|\bgasfitt\w*/i },
+  { label: "fitness and personal training", pattern: /\bgym\w*|\bfitness\b|\bboxing\b|\bkickbox\w*|\bpersonal train\w*|\bpilates\b/i },
+  { label: "car detailing", pattern: /\bdetail\w*|\bpaint correction\b|\bceramic coating\b/i },
+];
 export interface TavilyResearchOptions { apiKey?: string; fetch?: typeof fetch; clock?: () => Date; timeoutMs?: number; excludeDomains?: () => string[] }
 /** Official free keyless access for light discovery; a configured API key is never substituted automatically. */
 export class TavilyResearchSource implements ResearchSource {
@@ -54,16 +61,26 @@ export class TavilyResearchSource implements ResearchSource {
   async find(input: { area: string; count: number; industries?: string[] }): Promise<ProspectCandidate[]> {
     const area = text(input.area, 160); const count = Math.min(input.count, 5);
     if (!Number.isInteger(input.count) || input.count < 1 || input.count > 10) throw new RangeError("Discover from1 to10 businesses.");
-    const industry = input.industries?.map(i => text(i, 100)).slice(0, 3).join(" ") ?? "local service businesses";
-    const excluded = [...new Set((this.options.excludeDomains?.() ?? []).filter(host => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)))].slice(-100);
-    const results = await this.search({ query: `Independent ${industry} in ${area} Victoria Australia official business website contact -site:facebook.com -site:yellowpages.com.au -site:mapquest.com`, count: Math.min(10, count + 3) }, excluded);
+    const day = Number(new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Melbourne", day: "numeric" }).format(this.clock()));
+    const industry = input.industries?.map(i => text(i, 100)).slice(0, 3).join(" ") || SECTORS[day % SECTORS.length]!.label;
+    const sector = SECTORS.find(value => value.pattern.test(industry));
+    const industryWords = industry.toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 2 && !["business", "businesses", "services", "service", "local", "and", "the"].includes(word));
+    const localities = area.split(/[,;]|\band\b/i).map(value => value.replace(/\b(?:victoria|australia|vic)\b/ig, "").trim()).filter(Boolean);
+    // A single specific town avoids multi-town searches matching newspapers and gazette PDFs.
+    const queryLocality = localities[Math.floor(day / SECTORS.length) % Math.max(1, localities.length)] ?? area;
+    const excluded = [...new Set([...EXCLUDED_HOSTS, ...(this.options.excludeDomains?.() ?? []).filter(host => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)).slice(-100)])];
+    const results = await this.search({ query: `${industry} in ${queryLocality}, VIC official website`, count: 10 }, excluded);
     const seen = new Set<string>(); const candidates: ProspectCandidate[] = [];
     for (const result of results) {
       const url = new URL(result.url);
-      if (DIRECTORY_HOSTS.test(url.hostname) || seen.has(url.hostname)) continue;
+      if (DIRECTORY_HOSTS.test(url.hostname) || /(?:^|\.)(?:gov|edu)\.au$/i.test(url.hostname) || /\.(?:pdf|docx?|xlsx?|pptx?|zip|png|jpe?g)$/i.test(url.pathname) || /\/(?:news|blog|articles?|wp-content|gazette)\//i.test(url.pathname) || /\b(?:gazette|newspaper|local paper|government|directory|compare providers|businesses for sale)\b/i.test(result.title) || seen.has(url.hostname) || excluded.some(host => url.hostname === host || url.hostname.endsWith("." + host))) continue;
+      const sourceText = `${result.title} ${result.description} ${url.pathname}`.toLowerCase();
+      const locality = sourceText.includes(queryLocality.toLowerCase()) ? queryLocality : null;
+      if (!locality) continue;
+      if (sector ? !sector.pattern.test(sourceText) : !industryWords.some(word => sourceText.includes(word))) continue;
       // Discovery records retain the source's identity as unverified. No inferred email or claimed defects.
       seen.add(url.hostname);
-      candidates.push({ businessName: result.title.split(/\s+[|–—]\s+/)[0]!.slice(0, 160), location: `${area} (search area; location needs review)`, website: url.origin, industry: input.industries?.[0] ?? "Local service business — review sector", observations: [{ observation: result.description || `Search result for ${result.title}. Verify the business and location before outreach.`, sourceUrl: result.url, method: "search_result", status: "unverified", uncertainty: "Search excerpts may be outdated or refer to a service-area page. Identity, location, service facts and contact eligibility need review." }], commercialOpportunity: "Potential fit for a website concept; interest, need and current website performance are unverified.", recommendedScope: "Review the official site, then tailor a private website concept from verified service facts.", internalRecommendedPriceAud: null });
+      candidates.push({ businessName: result.title.split(/\s+[|–—]\s+/)[0]!.slice(0, 160), location: `${locality ?? area}, Victoria`, website: url.origin, industry, observations: [{ observation: result.description || `Search result for ${result.title}. Verify the business and location before outreach.`, sourceUrl: result.url, method: "search_result", status: "unverified", uncertainty: "Source excerpt matches the selected locality and sector, but may be outdated or refer to a service-area page. Business identity, base location, service facts and contact eligibility still need review." }], commercialOpportunity: "Potential fit for a website concept; interest, need and current website performance are unverified.", recommendedScope: "Review the official site, then tailor a private website concept from verified service facts.", internalRecommendedPriceAud: null });
       if (candidates.length >= count) break;
     }
     return candidates;

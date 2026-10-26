@@ -64,7 +64,8 @@ export function Acquisition({ onDataChanged }: { onDataChanged?: () => void }) {
     catch (e) { if (alive.current) setError(e instanceof Error ? e.message : "That update could not be completed."); return null; }
     finally { inFlight.current = false; if (alive.current) { setBusy(null); setLoading(false); } }
   };
-  const records = snapshot?.records ?? [];
+  const readiness = (record: AcquisitionRecord) => record.demo ? 2 + Number(Boolean(record.contact?.email && record.services.length)) : 0;
+  const records = [...(snapshot?.records ?? [])].sort((a, b) => readiness(b) - readiness(a));
   const selected = records.find((record) => record.id === selectedId) ?? records[0] ?? null;
   const openSender = () => { setSettingsOpen(true); window.setTimeout(() => settings.current?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }), 0); };
   const discover = async (event: FormEvent<HTMLFormElement>) => {

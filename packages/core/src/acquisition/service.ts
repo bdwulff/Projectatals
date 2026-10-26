@@ -34,6 +34,9 @@ export interface AddAcquisitionLeadInput { businessName: string; location: strin
 export type AcquisitionDraftStatus = "draft" | "blocked" | "awaiting_approval" | "queued" | "submitting" | "accepted" | "failed" | "uncertain" | "cancelled" | "simulated";
 export interface AcquisitionRecord {
   id: string; prospectId: string; businessName: string; location: string; industry: string; website: string | null; sourceUrl: string; observation: string; services: string[]; createdAt: string; updatedAt: string;
+  /** Internal archive metadata is retained for audit; archived leads are excluded from normal snapshots. */
+  archivedAt?: string;
+  archiveReason?: string;
   contact: AcquisitionContact | null;
   demo: { id: string; templateId: DemoTemplateId; templateName: string; htmlHash: string; previewPath: string; publicPath: string | null; publishedAt?: string; expiresAt: string } | null;
   draft: { id: string; version: number; from: string; to: string; subject: string; text: string; contentHash: string; status: AcquisitionDraftStatus; blockers: string[]; approvalId?: string; providerRef?: string; acceptedAt?: string } | null;
@@ -105,7 +108,7 @@ export class AcquisitionService {
     const area = required(input.area, "Area", 160);
     if (!Number.isInteger(input.count) || input.count < 1 || input.count > 5) throw new AcquisitionError("Discover one to five companies at a time.", 400);
     const prospects = await this.atlas.researchProspects({ area, count: input.count, ...(input.industry ? { industries: [required(input.industry, "Industry", 100)] } : {}) });
-    return prospects.slice(0, input.count).map(prospect => this.importProspect(prospect)).map(record => record.demo && record.draft ? record : this.prepare(record.id));
+    return prospects.slice(0, input.count).map(prospect => this.importProspect(prospect)).filter(record => !record.archivedAt).map(record => record.demo && record.draft ? record : this.prepare(record.id));
   }
 
   addLead(input: AddAcquisitionLeadInput): AcquisitionRecord {
@@ -114,7 +117,8 @@ export class AcquisitionService {
     const website = input.website ? sourceUrlValue(input.website, this.options.mode) : null;
     const services = servicesValue(input.services ?? []);
     const { prospect } = this.atlas.prospects.upsert({ businessName, location, industry, website, commercialOpportunity: "Independent website concept prepared from the recorded public source; commercial interest is unverified.", recommendedScope: "Independent website concept for owner review.", internalRecommendedPriceAud: null, evidence: [{ id: newId("evd"), reviewedAt: this.iso(), observation, sourceUrl, method: "manual", status: "unverified", uncertainty: "Source-backed research is not contact permission or proof of purchase intent." }], fixture: this.options.mode === "fake" });
-    const existing = this.records().find(record => record.prospectId === prospect.id);
+    const existing = this.records(true).find(record => record.prospectId === prospect.id);
+    if (existing?.archivedAt) throw new AcquisitionError("This lead is archived and cannot be imported again without an explicit restore.");
     if (existing) return existing;
     const record: AcquisitionRecord = { id: newId("acq"), prospectId: prospect.id, businessName, location, industry, website, sourceUrl, observation, services, createdAt: this.iso(), updatedAt: this.iso(), contact: null, demo: null, draft: null };
     if (input.contactEmail) record.contact = { email: emailValue(input.contactEmail, this.options.mode), sourceUrl: sourceUrlValue(input.contactSourceUrl ?? input.sourceUrl, this.options.mode), basis: "none_established", evidence: "", roleRelevant: false, noMarketingProhibition: false };
@@ -213,7 +217,19 @@ export class AcquisitionService {
     this.save(record);
   }
 
-  ownerPreview(demoId: string): { html: string; csp: string } | null { const demo = this.store.getDoc<InternalDemo>(DEMOS, demoId)?.doc; return demo ? { html: demo.html, csp: demo.csp } : null; }
+  archive(leadId: string, reason: string, ownerName: string): void {
+    const record = this.require(leadId, true);
+    const archiveReason = required(reason, "Archive reason", 600), by = required(ownerName, "Owner name", 120);
+    if (record.archivedAt) return;
+    this.revoke(leadId);
+    const archived = this.require(leadId, true);
+    archived.archivedAt = this.iso(); archived.archiveReason = archiveReason;
+    if (archived.draft && !TERMINAL.has(archived.draft.status) && archived.draft.status !== "submitting") { archived.draft.status = "cancelled"; archived.draft.blockers = ["This lead was archived."]; }
+    this.save(archived);
+    this.atlas.audit.record({ actor: "owner", action: "acquisition.lead.archived", business: "wulff_studio", targetType: "acquisition", targetId: leadId, outcome: "completed", detail: { reason: archiveReason, by } });
+  }
+
+  ownerPreview(demoId: string): { html: string; csp: string } | null { const demo = this.store.getDoc<InternalDemo>(DEMOS, demoId)?.doc; const lead = demo ? this.store.getDoc<AcquisitionRecord>(RECORDS, demo.leadId)?.doc : null; return demo && lead && !lead.archivedAt ? { html: demo.html, csp: demo.csp } : null; }
   publicPreview(rawToken: string): { html: string; csp: string } | null {
     if (!validToken(rawToken)) return null;
     const pointer = this.store.getDoc<{ demoId: string }>(TOKENS, sha(rawToken))?.doc;
@@ -230,18 +246,20 @@ export class AcquisitionService {
     const tokenRecord = this.store.getDoc<UnsubscribeRecord>(UNSUB, sha(rawToken))?.doc;
     if (!tokenRecord) return false;
     this.store.upsertDoc(SUPPRESSED, tokenRecord.emailHash, { at: this.iso(), source: "unsubscribe_link" });
-    for (const record of this.records()) if (record.contact && sha(record.contact.email.toLowerCase()) === tokenRecord.emailHash) { this.atlas.prospects.suppress(record.prospectId, "Unsubscribed using the outreach email link."); if (record.draft && !TERMINAL.has(record.draft.status) && record.draft.status !== "submitting") { record.draft.status = "cancelled"; record.draft.blockers = ["This recipient unsubscribed."]; this.save(record); } }
+    for (const record of this.records(true)) if (record.contact && sha(record.contact.email.toLowerCase()) === tokenRecord.emailHash) { this.atlas.prospects.suppress(record.prospectId, "Unsubscribed using the outreach email link."); if (record.draft && !TERMINAL.has(record.draft.status) && record.draft.status !== "submitting") { record.draft.status = "cancelled"; record.draft.blockers = ["This recipient unsubscribed."]; this.save(record); } }
     return true;
   }
 
   private async executeSend(job: SendPayload): Promise<{ status: AcquisitionDraftStatus; providerRef?: string }> {
-    let record = this.require(job.leadId);
+    let record = this.require(job.leadId, true);
+    if (record.archivedAt) return { status: "cancelled" };
     if (!record.draft || record.draft.status !== "queued") return { status: record.draft?.status ?? "cancelled" };
     if (record.draft.contentHash !== job.expectedHash) return { status: record.draft.status };
     try {
       this.assertHash(record, job.expectedHash);
       if (job.day !== day(this.clock())) throw new AcquisitionError("This queued message expired. Review a new version before sending.");
-      const email = await this.mailStatus(); record = this.require(job.leadId);
+      const email = await this.mailStatus(); record = this.require(job.leadId, true);
+      if (record.archivedAt) return { status: "cancelled" };
       if (!record.draft || record.draft.contentHash !== job.expectedHash || record.draft.status !== "queued") return { status: record.draft?.status ?? "cancelled" };
       this.assertHash(record, job.expectedHash);
       if (job.day !== day(this.clock())) throw new AcquisitionError("This queued message expired. Review a new version before sending.");
@@ -287,7 +305,7 @@ export class AcquisitionService {
   }
 
   private importProspect(prospect: Prospect): AcquisitionRecord {
-    const existing = this.records().find(record => record.prospectId === prospect.id); if (existing) return existing;
+    const existing = this.records(true).find(record => record.prospectId === prospect.id); if (existing) return existing;
     const evidence = prospect.evidence[0];
     const record: AcquisitionRecord = { id: newId("acq"), prospectId: prospect.id, businessName: prospect.businessName.slice(0, 160), location: prospect.location.slice(0, 160), industry: prospect.industry.slice(0, 120), website: prospect.website, sourceUrl: evidence?.sourceUrl ?? prospect.website ?? "", observation: evidence?.observation ?? "Discovery candidate; identity and location require review.", services: [], createdAt: this.iso(), updatedAt: this.iso(), contact: null, demo: null, draft: null };
     const stored = this.store.getMemory<{ email?: string }>(`prospect.contact.${prospect.id}`);
@@ -365,9 +383,9 @@ export class AcquisitionService {
   private assertHash(record: AcquisitionRecord, expected: string): void { if (!record.draft || typeof expected !== "string" || record.draft.contentHash !== expected || contentHash(this.payload(record)) !== expected) throw new AcquisitionError("This email version changed. Review the current email and demo before approving or editing."); }
   private assertEditable(record: AcquisitionRecord): void { if (record.draft?.status === "submitting" || record.draft?.status === "uncertain") throw new AcquisitionError("A submission is in progress or uncertain; check the provider before changing this record."); }
   private internal(record: AcquisitionRecord): InternalDemo { const demo = record.demo && this.store.getDoc<InternalDemo>(DEMOS, record.demo.id)?.doc; if (!demo) throw new AcquisitionError("Prepare a website concept first."); return demo; }
-  private records(): AcquisitionRecord[] { return this.store.listDocs<AcquisitionRecord>(RECORDS).map(row => row.doc); }
-  private require(id: string): AcquisitionRecord { const record = this.store.getDoc<AcquisitionRecord>(RECORDS, id)?.doc; if (!record) throw new AcquisitionError("Acquisition record not found.", 404); return record; }
-  private save(record: AcquisitionRecord): void { record.updatedAt = this.iso(); this.store.upsertDoc(RECORDS, record.id, record); }
+  private records(includeArchived = false): AcquisitionRecord[] { return this.store.listDocs<AcquisitionRecord>(RECORDS).map(row => row.doc).filter(record => includeArchived || !record.archivedAt); }
+  private require(id: string, includeArchived = false): AcquisitionRecord { const record = this.store.getDoc<AcquisitionRecord>(RECORDS, id)?.doc; if (!record) throw new AcquisitionError("Acquisition record not found.", 404); if (record.archivedAt && !includeArchived) throw new AcquisitionError("This lead is archived and cannot be changed without an explicit restore."); return record; }
+  private save(record: AcquisitionRecord): void { const existing = this.store.getDoc<AcquisitionRecord>(RECORDS, record.id)?.doc; if (existing?.archivedAt) { record.archivedAt = existing.archivedAt; record.archiveReason = existing.archiveReason; if (record.demo) record.demo.publicPath = null; } record.updatedAt = this.iso(); this.store.upsertDoc(RECORDS, record.id, record); }
   private iso(): string { return this.clock().toISOString(); }
   private url(path: string): string { return `${this.origin}${path}`; }
 }

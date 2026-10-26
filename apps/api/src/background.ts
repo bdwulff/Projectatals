@@ -49,7 +49,7 @@ export function createBackgroundWorker(rt: Runtime, env: NodeJS.ProcessEnv = pro
     const area = (env.ATLAS_RESEARCH_AREA?.trim() || DEFAULT_AREA).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").slice(0, 160);
     const raw = Number(env.ATLAS_RESEARCH_COUNT ?? 5);
     const count = Number.isFinite(raw) ? Math.min(env.ATLAS_RESEARCH_PROVIDER === "tavily" ? 5 : 10, Math.max(1, Math.floor(raw))) : 5;
-    const scopeHash = createHash("sha256").update(JSON.stringify({ area: area.toLowerCase(), count })).digest("hex").slice(0, 24);
+    const scopeHash = createHash("sha256").update(JSON.stringify({ area: area.toLowerCase(), count, policy: "local-business-v2" })).digest("hex").slice(0, 24);
     return { area, count, scopeHash };
   }
 

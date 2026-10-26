@@ -43,6 +43,12 @@ The implementation uses that documented header, basic depth and bounded results;
 it never falls back to a paid service or retries failed searches automatically.
 Provider rate limits can stop discovery. Owner calls are limited to three
 requests per minute. Direct lookups keep their source attribution and uncertainty.
+Discovery uses one specific locality and sector per request. It rejects
+government/education documents, news, directories, comparison portals and major
+fitness franchises, and requires locality and sector matches in returned source
+text. It may return fewer candidates rather than fill a target with unrelated
+pages. These checks improve relevance; they do not establish buying intent.
+Rejected pilot matches are archived with their evidence and revoked previews.
 
 Use `ATLAS_RESEARCH_PROVIDER=tavily`, `ATLAS_RESEARCH_ENABLED=true` and an area/count
 to enable daily preparation. The persistent once-per-Melbourne-day job prepares
@@ -118,7 +124,7 @@ provider IDs. Browser checks use clearly fictional records and intercept all
 provider traffic. They verify actual sandbox/CSP rendering and do not establish
 a live Gmail/Resend connection. Production connection status remains authoritative.
 
-Release validation passed247 workspace tests, the production build, workspace
+Release validation passed250 workspace tests, the production build, workspace
 typechecks and157 browser checks at1440/390/320px. The renderer additionally passed
 nine isolated layout renders. The free keyless endpoint returned real local
 business results during a read-only verification. No email was sent in testing.

@@ -53,8 +53,24 @@ describe("bounded Tavily discovery", () => {
     const request = vi.fn(async () => new Response(JSON.stringify({ results: [] })));
     const source = new TavilyResearchSource({ fetch: request, excludeDomains: () => ["already-researched.example.com", "invalid host"] });
     await source.find({ area: "Berwick", count: 2 });
-    expect(JSON.parse((request.mock.calls[0]?.[1] as RequestInit).body as string).exclude_domains).toEqual(["already-researched.example.com"]);
+    expect(JSON.parse((request.mock.calls[0]?.[1] as RequestInit).body as string).exclude_domains).toContain("already-researched.example.com");
+    expect(JSON.parse((request.mock.calls[0]?.[1] as RequestInit).body as string).exclude_domains).not.toContain("invalid host");
     await source.lookup({ query: "already researched business website" });
     expect(JSON.parse((request.mock.calls[1]?.[1] as RequestInit).body as string).exclude_domains).toBeUndefined();
+  });
+  it("does not turn newspapers, comparison portals, government PDFs or out-of-area/sector results into companies", async () => {
+    const rows = [
+      { title: "The Local Paper", url: "https://dindi.com.au/wp", content: "Cranbourne fencing news" },
+      { title: "Best Electricity Provider In VIC", url: "https://www.canstar.com.au/energy/electricity-providers-vic", content: "Cranbourne fencing and energy providers" },
+      { title: "Victoria Government Gazette", url: "https://www.gazette.vic.gov.au/gazette/Gazettes2026/GG2026G034.pdf", content: "Cranbourne fencing" },
+      { title: "Fencing industry report", url: "https://example.com/report.pdf", content: "Cranbourne fencing" },
+      { title: "Sydney Fencing", url: "https://sydney-fencing.example.com", content: "Fencing services in Sydney" },
+      { title: "Cranbourne Cafe", url: "https://cafe.example.com", content: "Cranbourne coffee and lunch" },
+      payload.results[0],
+    ];
+    const source = new TavilyResearchSource({ fetch: vi.fn(async () => new Response(JSON.stringify({ results: rows }))) });
+    const leads = await source.find({ area: "Cranbourne, Victoria", count: 5, industries: ["Fencing"] });
+    expect(leads.map(lead => lead.businessName)).toEqual(["Fieldwork Fencing"]);
+    expect(leads[0]?.observations[0]?.status).toBe("unverified");
   });
 });
