@@ -1,6 +1,6 @@
 # Atlas installation and operational report — 26 October 2026
 
-> Current update: Railway and Jarvis Studio are deployed and verified. Free local-business search, private demo generation and exact email preparation are operational; hosted email is not connected. See [CLIENT-ACQUISITION.md](CLIENT-ACQUISITION.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for setup and live evidence. Earlier sections below record prior milestones.
+> Current update: the hosted branding/greeting/update release is verified. Four real business logos and twelve photos are embedded in private concepts; the fifth source restricts copying artwork. Automatic device greetings use no AI credits. Gmail/independent Resend selection and opt-in email/Telegram owner updates are implemented, but no email or messaging account is connected. All 312 tests passed. See [BRANDING-AND-UPDATES.md](BRANDING-AND-UPDATES.md) and [DEPLOYMENT.md](DEPLOYMENT.md). Earlier sections below record prior milestones.
 
 ## DELIVERED
 

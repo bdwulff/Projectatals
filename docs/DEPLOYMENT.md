@@ -1,6 +1,6 @@
 # Jarvis hosted deployment
 
-Verified 26 October 2026. Railway reported deployment `e70c8e19-2ad3-4bed-9a4b-c16f895e2915`
+Verified 26 October 2026. Railway reported deployment `73f18938-fdc1-462e-8519-dd3046912a07`
 **SUCCESS**. This is a CLI source upload, not an unverified queued build.
 
 - App: https://atlas-command-centre-production.up.railway.app
@@ -23,13 +23,44 @@ Live HTTP verification passed:
 - Authenticated status reports live mode with actual connection states.
 - Authenticated Mac ZIP download returns200 and passes ZIP CRC validation.
 - The deployed Jarvis JavaScript and CSS SHA-256 hashes exactly match the build
-  that passed 157 acquisition browser checks across desktop and phone widths.
+  that passed the new branding, greeting and owner-update browser checks.
 - The read-only ElevenLabs check reports George connected with explicit playback
   enabled. Release verification generated no audio.
 
 The release includes the responsive voice core, private sign-in, command dock,
 navigation and unavailable-data panels described in [JARVIS-INTERFACE.md](JARVIS-INTERFACE.md).
-All 250 workspace tests and the production build passed before release.
+All 312 workspace tests and the production build passed before release.
+The new browser suites passed 39 Studio checks, 30 greeting/update checks, nine
+renderer layouts and ten layouts using the actual sourced business profiles.
+
+## Branding, greetings and owner updates
+
+The live production transport fetched four real business logos and three photos
+per business for ShineCraft Detailing Hub, Personal Performance Training Centre,
+M&M Mobile Tyre and Auto, and Officer Plumbing Services. Protected concept HTML
+contains embedded raster images and sourced details. The chosen design styles
+were preserved, drafts received new exact hashes, contact eligibility remained
+unestablished, and all five refreshed concepts remained private. Cranbourne
+Fencing supplied an address and phone but explicitly prohibits copying artwork;
+that concept retains original illustrations with the restriction recorded.
+
+The automatic greeting uses the device's own speech voice once per sign-in, with
+no AI/ElevenLabs request. Browser checks cover autoplay needing a tap, voice
+selection, the off switch, reload/navigation deduplication and microphone/audio
+priority. Physical iPhone speech playback has not been tested here.
+
+Studio now lets the owner choose Gmail or business-domain Resend explicitly.
+Resend supports a domain the owner controls independently of its mailbox host;
+native Outlook/iCloud sign-in is not implemented. Both email connections remain
+**not connected** because no sender credentials are saved. Devices → Owner
+updates offers opt-in email/Telegram alerts, explicit test buttons and a digest
+after 09:00 Melbourne time. The verified live settings contain no recipient,
+all delivery switches are off and no owner submission exists. Connection reads
+and setup pages remain protected by owner login.
+
+No email, Telegram message, paid audio or public concept was submitted during
+release verification. No new subscription, service upgrade or domain was bought.
+See [BRANDING-AND-UPDATES.md](BRANDING-AND-UPDATES.md).
 
 ## Client acquisition release
 
