@@ -1,5 +1,7 @@
 # Atlas architecture (as built)
 
+> Historical foundation snapshot (25 October). Current implementation, connection status and blockers are recorded in [INSTALLATION-REPORT.md](INSTALLATION-REPORT.md); newer setup is in [HOSTING-AND-CALLS.md](HOSTING-AND-CALLS.md). Statements below about absent connectors or unauthenticated routes describe the earlier snapshot.
+
 Status date: 25 October 2026. This document describes code that exists in the repository today. Planned components are marked as such.
 
 ## 1. Monorepo layout

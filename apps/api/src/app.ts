@@ -1,15 +1,26 @@
 import { Hono } from "hono";
-import { cors } from "hono/cors";
+import { bodyLimit } from "hono/body-limit";
+import { buildDailyBoxSafeBriefing } from "@atlas/core";
 import type { Runtime } from "./runtime.js";
+import { authOptionsFromEnv, installOwnerAuth, type OwnerAuthOptions } from "./auth.js";
 
-export function createApp(rt: Runtime) {
+export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptionsFromEnv()) {
   const app = new Hono();
   const { atlas } = rt;
-  app.use("/api/*", cors());
+  app.use("*", async (c, next) => {
+    c.header("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'self'");
+    c.header("X-Frame-Options", "DENY");
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("Referrer-Policy", "same-origin");
+    await next();
+  });
+  app.use("/api/*", bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ error: "Request body too large." }, 413) }));
+  installOwnerAuth(app, rt, authOptions);
+  app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
   app.get("/api/status", async (c) => {
     const connections = await atlas.connections();
-    return c.json({ atlas: { online: true, version: "0.1.0", time: atlas.clock().toISOString(), mode: rt.mode, timezone: "Australia/Melbourne" }, connections });
+    return c.json({ atlas: { online: true, version: "0.1.0", time: atlas.clock().toISOString(), mode: rt.mode, timezone: "Australia/Melbourne" }, connections, background: atlas.deps.store.getMemory("background.lastRun") ?? null });
   });
   app.get("/api/briefing", async (c) => c.json(await atlas.briefing()));
   app.get("/api/alerts", (c) => c.json(atlas.notifications.list({ unacknowledgedOnly: c.req.query("all") !== "1" })));
@@ -17,15 +28,16 @@ export function createApp(rt: Runtime) {
   app.get("/api/approvals", (c) => { const status = c.req.query("status"); return c.json(status === "all" ? atlas.approvals.list() : atlas.approvals.pending()); });
   app.post("/api/approvals/:id/decide", async (c) => {
     const body = (await c.req.json()) as { decision: "approve" | "reject" | "revise"; note?: string; priceAud?: number | null; by?: string };
+    if (!["approve", "reject", "revise"].includes(body.decision) || (body.priceAud != null && (!Number.isFinite(body.priceAud) || body.priceAud < 0))) return c.json({ error: "Invalid approval decision." }, 400);
     const approval = atlas.approvals.get(c.req.param("id"));
     if (!approval) return c.json({ error: "not found" }, 404);
     try {
       if (approval.action === "approve.quote_send") {
-        const r = atlas.decideQuote(body.decision, body.by ?? atlas.deps.config.ownerName, { approvalId: approval.id, priceAud: body.priceAud ?? null, note: body.note });
+        const r = atlas.decideQuote(body.decision, atlas.deps.config.ownerName, { approvalId: approval.id, priceAud: body.priceAud ?? null, note: body.note });
         await atlas.jobs.runOnce();
         return c.json({ ok: true, result: r, quote: atlas.quotes.get(r.revised?.quote.id ?? r.quote.id) });
       }
-      const decided = atlas.approvals.decide(approval.id, body.decision, body.by ?? atlas.deps.config.ownerName, body.note);
+      const decided = atlas.approvals.decide(approval.id, body.decision, atlas.deps.config.ownerName, body.note);
       return c.json({ ok: true, result: { approval: decided } });
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : String(e) }, 409);
@@ -40,6 +52,15 @@ export function createApp(rt: Runtime) {
     return c.json({ ...r, spoken: (await import("@atlas/core")).spokenOrderSummary(r.summary) });
   });
   app.get("/api/boxsafe/dispatch", async (c) => c.json(await atlas.boxsafeDispatchList()));
+  app.get("/api/boxsafe/daily-briefing", async (c) => {
+    try {
+      const connections = await Promise.all([atlas.deps.boxsafe.status(), atlas.deps.stripe.status()]);
+      const mode = connections.every((connection) => connection.mode === "fake") ? "fake" : "live";
+      return c.json(await buildDailyBoxSafeBriefing({ boxsafe: atlas.deps.boxsafe, stripe: atlas.deps.stripe, now: atlas.clock(), mode }));
+    } catch {
+      return c.json({ error: "BoxSafe briefing unavailable. Verify both read connections; no financial result was produced.", mode: "unavailable" }, 503);
+    }
+  });
   app.get("/api/boxsafe/reconcile", async (c) => c.json(await atlas.reconcileBoxSafe((c.req.query("range") as "today" | "week" | "month") ?? "today")));
   app.get("/api/finance", async (c) => {
     const [today, week, month] = await Promise.all([atlas.boxsafeSummary("today"), atlas.boxsafeSummary("week"), atlas.boxsafeSummary("month")]);

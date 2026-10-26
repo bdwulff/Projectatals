@@ -1,5 +1,7 @@
 # Atlas plugins and integrations register
 
+> Historical foundation snapshot (25 October). Current implementation, connection status and blockers are recorded in [INSTALLATION-REPORT.md](INSTALLATION-REPORT.md); newer setup is in [HOSTING-AND-CALLS.md](HOSTING-AND-CALLS.md). Statements below about absent connectors or unauthenticated routes describe the earlier snapshot.
+
 Status date: 25 October 2026. Nothing in this register is connected yet. Every adapter in `packages/core` runs on fake data until Brandon supplies the credential named in the Setup column. Costs are estimates in AUD per month and must be verified on each provider's pricing page before any spend is authorised. The experimentation budget is A$300 total; A$0 has been spent.
 
 How to read the columns:

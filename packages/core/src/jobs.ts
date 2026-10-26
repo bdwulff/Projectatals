@@ -17,6 +17,7 @@ export interface EnqueueOptions {
  * without repeating external actions (section 15).
  */
 export class JobQueue {
+  private running = false;
   private handlers = new Map<string, JobHandler<any, any>>();
 
   constructor(private readonly store: Store, private readonly audit: AuditLog, private readonly backoffMs = (attempt: number) => Math.min(60_000, 1000 * 2 ** attempt)) {}
@@ -49,6 +50,9 @@ export class JobQueue {
 
   /** Process due jobs once. Returns the jobs touched. Safe to call from a scheduler tick. */
   async runOnce(limit = 20, now: Date = new Date()): Promise<StoredJob[]> {
+    if (this.running) return [];
+    this.running = true;
+    try {
     const due = this.store.dueJobs(now.toISOString(), limit);
     const touched: StoredJob[] = [];
     for (const job of due) {
@@ -86,6 +90,7 @@ export class JobQueue {
       touched.push(job);
     }
     return touched;
+    } finally { this.running = false; }
   }
 
   /** Drain until nothing is due (used by tests and the demo). */

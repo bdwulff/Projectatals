@@ -11,10 +11,12 @@ confirms a real connection.
 
 ## Status
 
-Phase 1 (audit and foundation) is delivered on fictional data with fake adapters.
-No live system is connected yet. See `docs/CAPABILITIES-REGISTER.md` for what is
-verified, built, planned or blocked, and `docs/PLUGINS-AND-INTEGRATIONS.md` for the
-connections Brandon needs to authorise.
+The existing foundation now includes an owner login, a read-only BoxSafe MCP,
+source-attributed web research, a daily persistent research worker and guarded owner
+call/push adapters. These components are tested locally; provider accounts and live
+credentials still determine which capabilities can operate. See
+`docs/INSTALLATION-REPORT.md` for current evidence and remaining connection steps.
+No live BoxSafe or Stripe financial result has been produced.
 
 ## Layout
 
@@ -48,8 +50,7 @@ Persist state: `ATLAS_DB_PATH=./data/atlas.sqlite pnpm dev:api`.
 
 `ATLAS_MODE=fake` (default) uses in-memory fakes for every external system.
 `ATLAS_MODE=live` switches each adapter to its live implementation only when its
-credentials are present (see `.env.example`); everything else stays fake and is
-reported as such on `/api/status` and in every briefing.
+credentials are present (see `.env.example`); missing connections stay unavailable and never produce fictional results.
 
 ## Guarantees enforced in code
 
@@ -66,3 +67,35 @@ reported as such on `/api/status` and in every briefing.
 * Scheduled checks are keyed; re-running produces no duplicate notifications.
 * A live mailer refuses to send to a suppressed prospect, or one with no recorded
   lawful basis for contact.
+
+## Owner access and hosting
+
+The API now fails closed without owner authentication. For explicit local fictional
+mode only, set `ATLAS_ALLOW_INSECURE_LOCAL_FAKE=true` while bound to loopback.
+Hosted mode requires an HTTPS `ATLAS_PUBLIC_ORIGIN`, a random 32+ character
+`ATLAS_OWNER_ACCESS_KEY`, persistent `ATLAS_DB_PATH`, `ATLAS_BIND_HOST=0.0.0.0`
+and one replica. Owner credentials stay in the server secret manager; browser
+sessions are expiring HttpOnly cookies. Server restart requires a new login.
+See `docs/HOSTING-AND-CALLS.md`.
+
+## BoxSafe MCP and complete briefing
+
+```sh
+pnpm --filter @atlas/core build
+pnpm --filter @atlas/boxsafe-mcp build
+pnpm --filter @atlas/boxsafe-mcp demo
+node scripts/setup-claude.mjs
+```
+
+The demo uses **fictional records**. It produces orders, reconciliation issues,
+dispatch counts and spoken text. Browser speech or iOS Speak Text can read this
+aloud; this is not a completed phone call. Configure the actual Claude Code host
+using `.mcp.json.example` and `docs/AUTOMATION-SETUP.md`.
+
+## Client research and lookups
+
+`Find five clients around Berwick` creates sourced, unverified discovery candidates.
+`Look up ...` returns source excerpts. Automatic daily discovery requires explicit
+live configuration and a Brave Search key; it never contacts clients or creates
+quotes. `docs/INITIAL-RESEARCH.md` contains a separately sourced first shortlist.
+`docs/LIVE-RESEARCH.md` explains the provider and evidence limits.

@@ -60,23 +60,27 @@ export function inRange(iso: string | null, from: Date, to: Date): boolean {
   return t >= from.getTime() && t < to.getTime();
 }
 
+/** Convert each local calendar boundary independently: Melbourne days can be 23 or 25 hours. */
 export function melbourneDayRange(now: Date, label: "today" | "week" | "month"): { from: Date; to: Date; label: string } {
-  // Melbourne local date boundaries. Intl gives the offset for the instant without a tz library.
+  if (!Number.isFinite(now.getTime())) throw new Error("Invalid briefing date");
   const fmt = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Melbourne", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
-  const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
-  const localMidnightUtcGuess = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
-  const localNowUtcGuess = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second));
-  const offsetMs = localNowUtcGuess - now.getTime();
-  const startOfToday = new Date(localMidnightUtcGuess - offsetMs);
-  const dayMs = 86_400_000;
-  if (label === "today") return { from: startOfToday, to: new Date(startOfToday.getTime() + dayMs), label: "today" };
-  if (label === "week") {
-    const dow = (new Date(localMidnightUtcGuess).getUTCDay() + 6) % 7; // Monday = 0
-    const from = new Date(startOfToday.getTime() - dow * dayMs);
-    return { from, to: new Date(startOfToday.getTime() + dayMs), label: "this week" };
-  }
-  const from = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, 1) - offsetMs);
-  return { from, to: new Date(startOfToday.getTime() + dayMs), label: "this month" };
+  const parts = (date: Date) => Object.fromEntries(fmt.formatToParts(date).map(p => [p.type, Number(p.value)]));
+  const local = parts(now);
+  const today = Date.UTC(local.year!, local.month! - 1, local.day!);
+  const boundary = (calendarUtc: number) => {
+    let instant = calendarUtc;
+    for (let i = 0; i < 4; i++) {
+      const p = parts(new Date(instant));
+      const offset = Date.UTC(p.year!, p.month! - 1, p.day!, p.hour!, p.minute!, p.second!) - instant;
+      const next = calendarUtc - offset;
+      if (next === instant) break;
+      instant = next;
+    }
+    return new Date(instant);
+  };
+  const start = label === "month" ? Date.UTC(local.year!, local.month! - 1, 1)
+    : label === "week" ? today - ((new Date(today).getUTCDay() + 6) % 7) * 86_400_000 : today;
+  return { from: boundary(start), to: boundary(today + 86_400_000), label: label === "month" ? "this month" : label === "week" ? "this week" : "today" };
 }
 
 export function summariseOrders(orders: BoxSafeOrder[], range: { from: Date; to: Date; label: string }): OrderSummary {

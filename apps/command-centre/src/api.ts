@@ -9,9 +9,31 @@ export interface ConnectionStatus {
   mode: "live" | "fake";
 }
 export interface Status {
-  atlas: { online: boolean; version: string; time: string; mode: "fake" | "mixed"; timezone: string };
+  atlas: { online: boolean; version: string; time: string; mode: "fake" | "live" | "mixed"; timezone: string };
   connections: ConnectionStatus[];
+  background?: {
+    state: "running" | "completed" | "partial" | "skipped";
+    startedAt: string;
+    finishedAt?: string;
+    checks: BackgroundTaskState;
+    research: BackgroundTaskState;
+  } | null;
 }
+
+export interface BackgroundTaskState {
+  state: "completed" | "partial" | "failed" | "skipped" | "blocked" | "already_ran" | "queued" | "running";
+  detail: string;
+  candidateCount?: number;
+}
+
+export interface OwnerSession {
+  authenticated: boolean;
+  configured: boolean;
+  developmentBypass?: boolean;
+  expiresAt?: string;
+}
+
+export const SESSION_EXPIRED_EVENT = "atlas:session-expired";
 
 export interface Briefing {
   generatedAt: string;
@@ -228,6 +250,7 @@ const BASE = "/api";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", Accept: "application/json", ...(init?.headers ?? {}) },
   });
   const text = await res.text();
@@ -238,6 +261,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     body = text;
   }
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith("/auth/") && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    }
     const msg =
       body && typeof body === "object" && "error" in body && typeof (body as { error: unknown }).error === "string"
         ? (body as { error: string }).error
@@ -252,6 +278,9 @@ const post = <T>(path: string, data?: unknown) =>
   request<T>(path, { method: "POST", body: data === undefined ? undefined : JSON.stringify(data) });
 
 export const api = {
+  session: () => get<OwnerSession>("/auth/session"),
+  login: (accessKey: string) => post<OwnerSession>("/auth/login", { accessKey }),
+  logout: () => post<{ authenticated: false }>("/auth/logout", {}),
   status: () => get<Status>("/status"),
   briefing: () => get<Briefing>("/briefing"),
   alerts: (all = false) => get<Notification[]>(`/alerts${all ? "?all=1" : ""}`),

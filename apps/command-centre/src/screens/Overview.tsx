@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Activity, ArrowRight, FlaskConical, Play } from "lucide-react";
-import { api, melbourneDate, melbourneTime, type Briefing, type Notification, type Status } from "../api";
+import { api, melbourneDate, melbourneTime, type BackgroundTaskState, type Briefing, type Notification, type Status } from "../api";
 import { useNow, usePoll } from "../hooks";
 import { AlertList } from "../components/Alerts";
 import { CommandBar } from "../components/CommandBar";
-import { Card, Done, Empty, ErrorBanner, FakeBadge, Loading, RefreshButton, StateDot, stateLabel } from "../components/ui";
+import { Card, Chip, Done, Empty, ErrorBanner, FakeBadge, Loading, RefreshButton, StateDot, stateLabel } from "../components/ui";
 import type { Tab } from "../components/Nav";
 
 export function Overview({ status, onNavigate, onDataChanged }: { status: Status | null; onNavigate: (t: Tab) => void; onDataChanged: () => void }) {
@@ -115,6 +115,21 @@ export function Overview({ status, onNavigate, onDataChanged }: { status: Status
             )}
           </Card>
 
+          <Card label="Background work" title={status?.background?.state === "running" ? "Run in progress" : "Latest reported run"} action={<RefreshButton onClick={onDataChanged} />}>
+            {!status ? <Loading label="Checking background work" /> : !status.background ? (
+              <p className="text-sm text-slate-400">No background run has been reported yet.</p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-400">
+                  {status.background.finishedAt ? "Finished" : "Started"} {melbourneDate(status.background.finishedAt ?? status.background.startedAt)} at {melbourneTime(status.background.finishedAt ?? status.background.startedAt)} Melbourne
+                </p>
+                <BackgroundTask label="Business checks" task={status.background.checks} />
+                <BackgroundTask label="Daily research" task={status.background.research} />
+                <p className="text-[11px] text-slate-500">Blocked, failed or skipped tasks have not completed. This shows the last reported attempt.</p>
+              </div>
+            )}
+          </Card>
+
           {/* Connections */}
           <Card label="Connections" title="Live state">
             {!status && <Loading label="Checking connections" />}
@@ -147,6 +162,22 @@ export function Overview({ status, onNavigate, onDataChanged }: { status: Status
         {!alerts.data && !alerts.error && <Loading label="Loading alerts" />}
         {alerts.data && <AlertList alerts={alerts.data} onChanged={refreshAll} onOpenApproval={() => onNavigate("approvals")} />}
       </Card>
+    </div>
+  );
+}
+
+function BackgroundTask({ label, task }: { label: string; task: BackgroundTaskState }) {
+  const labels: Record<BackgroundTaskState["state"], string> = {
+    completed: "Completed", partial: "Partly completed", failed: "Failed", skipped: "Skipped",
+    blocked: "Blocked", already_ran: "Already completed", queued: "Queued", running: "Running",
+  };
+  const tone = task.state === "failed" ? "danger" : task.state === "blocked" || task.state === "partial" ? "warn"
+    : task.state === "completed" || task.state === "already_ran" ? "ok" : task.state === "queued" || task.state === "running" ? "accent" : "neutral";
+  return (
+    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between gap-2"><span className="text-sm text-slate-200">{label}</span><Chip tone={tone}>{labels[task.state]}</Chip></div>
+      <p className="mt-2 text-xs leading-relaxed text-slate-400">{task.detail}</p>
+      {task.candidateCount !== undefined && <p className="mt-1 text-xs text-slate-300">{task.candidateCount} discovery candidate{task.candidateCount === 1 ? "" : "s"} recorded.</p>}
     </div>
   );
 }
