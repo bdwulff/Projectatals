@@ -1,6 +1,6 @@
 # Jarvis hosted deployment
 
-Verified 26 October 2026. Railway reported deployment `bb350e1c-4dc8-47f2-a715-302aaeb5f1f6`
+Verified 26 October 2026. Railway reported deployment `e70c8e19-2ad3-4bed-9a4b-c16f895e2915`
 **SUCCESS**. This is a CLI source upload, not an unverified queued build.
 
 - App: https://atlas-command-centre-production.up.railway.app
@@ -23,13 +23,35 @@ Live HTTP verification passed:
 - Authenticated status reports live mode with actual connection states.
 - Authenticated Mac ZIP download returns200 and passes ZIP CRC validation.
 - The deployed Jarvis JavaScript and CSS SHA-256 hashes exactly match the build
-  that passed 131 browser checks across desktop, tablet and phone widths.
+  that passed 157 acquisition browser checks across desktop and phone widths.
 - The read-only ElevenLabs check reports George connected with explicit playback
   enabled. Release verification generated no audio.
 
 The release includes the responsive voice core, private sign-in, command dock,
 navigation and unavailable-data panels described in [JARVIS-INTERFACE.md](JARVIS-INTERFACE.md).
-All 160 workspace tests and the production build passed before release.
+All 250 workspace tests and the production build passed before release.
+
+## Client acquisition release
+
+Studio now discovers bounded local service-business candidates through official
+free keyless Tavily search and prepares private concepts and email drafts. The
+daily worker is enabled for up to three candidates per Melbourne day across the
+configured south-east Melbourne area. Discovery requires sector/locality evidence
+and excludes documents, public institutions, directories and major fitness chains.
+Weak pilot matches were archived with their evidence and previews revoked.
+
+The release imported thirteen source-backed existing/manually researched records.
+Five tailored concepts and matching drafts were verified through actual protected
+HTML reads: Cranbourne Fencing, ShineCraft Detailing Hub, Personal Performance
+Training Centre, M&M Mobile Tyre and Auto, and Officer Plumbing Services. Following
+the live discovery check and rejected-match review, the active queue held fifteen
+records and seven private concepts. Search-only identities remain unverified.
+
+Actual Gmail/Resend sending is **not connected**. Google OAuth client configuration,
+owner sign-in, contact eligibility and exact outgoing-version approval remain
+required. No prospect email or public concept was sent/published during this
+release work. The private setup guide is linked in Studio's Sender setup.
+See [CLIENT-ACQUISITION.md](CLIENT-ACQUISITION.md).
 
 No physical Mac installation, live Mac pairing, device automation or phone call
 has been performed here. Those require the owner's device or provider setup.
@@ -53,12 +75,13 @@ limits and the explicit Play button.
 
 ## Still disconnected at verification
 
-BoxSafe, Stripe, Brave Search, Resend, Twilio and ntfy have no verified live
+BoxSafe, Stripe, quote email, prospect email, Twilio and ntfy have no verified live
 credentials. ElevenLabs is verified separately through `/api/voice/status`.
 Website checking is available; that capability state does not
 assert an arbitrary site's reachability. Scheduled checks run, and the dashboard
-shows connection failures. Daily discovery remains disabled until a search provider
-is authorised. No customer outreach or production BoxSafe write was enabled.
+shows connection failures. Free keyless Tavily discovery is verified and daily
+private preparation is enabled. Customer sending remains blocked by the actual
+mail connection and approval/eligibility gates. No production BoxSafe write was enabled.
 
 ## Maintenance
 

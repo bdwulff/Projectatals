@@ -1,6 +1,6 @@
 # Atlas installation and operational report — 26 October 2026
 
-> Current update: Railway is now deployed and verified. See [DEPLOYMENT.md](DEPLOYMENT.md) for the live URL, exact validation and remaining provider connections. Earlier sections below record prior setup milestones.
+> Current update: Railway and Jarvis Studio are deployed and verified. Free local-business search, private demo generation and exact email preparation are operational; hosted email is not connected. See [CLIENT-ACQUISITION.md](CLIENT-ACQUISITION.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for setup and live evidence. Earlier sections below record prior milestones.
 
 ## DELIVERED
 
