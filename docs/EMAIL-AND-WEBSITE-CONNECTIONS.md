@@ -63,15 +63,17 @@ guide. An email address entered as sender identity is not an authenticated mail
 connection.
 
 - Gmail uses an owner-initiated OAuth connection after its Google client settings
-  are configured. The existing implementation grants send-only access.
+  are configured. It supports read-only inbox access plus approved sending.
+  The private setup wizard accepts the Google Web client JSON file.
 - Resend sends from a verified domain the owner controls, independently of its
   mailbox host. It does not create or read that mailbox. Shared provider domains
   such as `outlook.com` cannot be verified as an owner-controlled sender domain.
 - Sending to recipients using any email provider is supported once the chosen
   sender is verified. Each prospect email retains its exact-version approval.
-- Reading incoming messages and native Outlook/iCloud mailbox sign-in are not
-  implemented in the hosted app. The intended mailbox/provider must be chosen
-  before adding the appropriate inbox integration.
+- Gmail inbox/header and plain-text message reading is implemented with explicit
+  owner requests, no mark-read or label changes and no automatic replies. Native
+  Outlook/iCloud mailbox sign-in remains unavailable. See
+  [GMAIL-CONNECTION.md](GMAIL-CONNECTION.md) for the intended-account setup.
 
 See [CLIENT-ACQUISITION.md](CLIENT-ACQUISITION.md) and
 [BRANDING-AND-UPDATES.md](BRANDING-AND-UPDATES.md) for exact sender setup.

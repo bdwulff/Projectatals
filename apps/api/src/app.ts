@@ -5,6 +5,7 @@ import { commandSafetyReply, createConversationControl, normaliseSpokenCommand }
 import { installAcquisitionRoutes } from "./acquisition.js";
 import { installOwnerUpdateRoutes } from "./owner-updates.js";
 import { installWebsiteRoutes, WebsiteConnections } from "./websites.js";
+import { installMailRoutes } from "./mail.js";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { buildDailyBoxSafeBriefing } from "@atlas/core";
@@ -33,6 +34,7 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   const conversationControl = createConversationControl(rt, { websites: () => websiteConnections.snapshot() });
   installOwnerUpdateRoutes(app, rt.ownerUpdates);
   installWebsiteRoutes(app, websiteConnections);
+  installMailRoutes(app, rt);
   app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
   app.get("/api/status", async (c) => {

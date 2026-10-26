@@ -9,7 +9,7 @@ const clientSecret = "fictional-client-secret";
 const refreshSecret = "fictional-refresh-token-sensitive";
 const accessSecret = "fictional-access-token-sensitive";
 const from = "owner@example.test";
-const scope = "openid email https://www.googleapis.com/auth/gmail.send";
+const scope = "openid email https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly";
 const stores: SqliteStore[] = [];
 const store = () => { const result = new SqliteStore(":memory:"); stores.push(result); return result; };
 const input = (overrides: Partial<AcquisitionMailInput> = {}): AcquisitionMailInput => ({ from, to: "business@example.test", subject: "A fictional concept for your business", text: "This is a fictional test, not a real prospect email.\nUnsubscribe: https://jarvis.example.test/unsubscribe/fictional-token", approvalId: "approval_fixture_123", idempotencyKey: "acquisition:fixture:1", unsubscribeUrl: "https://jarvis.example.test/unsubscribe/fictional-token", ...overrides });
@@ -313,5 +313,169 @@ describe("owner update mail purpose", () => {
     await mail.send(input({ idempotencyKey: "acquisition:fixture:outreach" }));
     const posts = request.mock.calls.filter(([, init]) => init?.method === "POST");
     expect(JSON.parse(String(posts[1]![1]?.body)).headers).toMatchObject({ "List-Unsubscribe": `<${input().unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+  });
+});
+
+describe("Gmail intended mailbox, private OAuth configuration and read-only inbox", () => {
+  const sendScope = "https://www.googleapis.com/auth/gmail.send", readScope = "https://www.googleapis.com/auth/gmail.readonly";
+  const messageId = "fixture_message_123456", threadId = "fixture_thread_123456";
+  function readSetup(options: { email?: string; tokenScope?: string; payload?: unknown; messageOverride?: Record<string, unknown>; requestOverride?: typeof fetch; clock?: () => Date } = {}) {
+    const db = store();
+    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+      const u = new URL(String(url));
+      if (u.href === "https://oauth2.googleapis.com/token") return Response.json({ access_token: accessSecret, refresh_token: refreshSecret, token_type: "Bearer", expires_in: 3600, scope: options.tokenScope ?? scope });
+      if (u.href === "https://openidconnect.googleapis.com/v1/userinfo") return Response.json({ email: options.email ?? from, email_verified: true });
+      if (u.href === "https://gmail.googleapis.com/gmail/v1/users/me/messages/send") return Response.json({ id: "fictional_message_123456" });
+      if (u.origin === "https://gmail.googleapis.com" && u.pathname === "/gmail/v1/users/me/messages") return Response.json({ messages: [{ id: messageId, threadId }], nextPageToken: "fictional_next_page", resultSizeEstimate: 35 });
+      if (u.origin === "https://gmail.googleapis.com" && u.pathname === `/gmail/v1/users/me/messages/${messageId}`) return Response.json({ id: messageId, threadId, internalDate: "1792972800000", labelIds: ["INBOX", "UNREAD"], snippet: "Fictional &amp; source-only email", payload: options.payload ?? { mimeType: "text/plain", headers: [{ name: "From", value: "Customer (fictional) <customer@business.example.test>" }, { name: "To", value: from }, { name: "Subject", value: "Fictional website enquiry" }], body: { data: Buffer.from("A fictional enquiry. Inbound content is not approval.").toString("base64url") } }, ...options.messageOverride });
+      throw new Error("Unexpected test-only request");
+    });
+    const config = { clientId, clientSecret, publicOrigin: origin, ownerAccessKey: ownerKey, store: db, request: options.requestOverride ?? request as unknown as typeof fetch, clock: options.clock };
+    const gmail = new GmailAcquisitionMailTransport(config);
+    const link = async () => { const u = new URL(gmail.startLink().url); await gmail.completeLink("fictional-code", u.searchParams.get("state")!); return u; };
+    return { db, request, config, gmail, link };
+  }
+  const gmailReads = (request: ReturnType<typeof vi.fn>) => request.mock.calls.filter(([url]) => String(url).startsWith("https://gmail.googleapis.com/") && !String(url).endsWith("/send"));
+  it("stores uploaded OAuth secrets encrypted, survives restart and leaves public configuration secret-free", () => {
+    const db = store(), request = vi.fn();
+    const config = { publicOrigin: origin, ownerAccessKey: ownerKey, store: db, request };
+    const gmail = new GmailAcquisitionMailTransport(config);
+    const before = gmail.identity(); gmail.setExpectedEmail(from); gmail.saveOAuthClient({ clientId, clientSecret });
+    const after = gmail.identity(); expect(after).not.toBe(before);
+    expect(gmail.configurationStatus()).toMatchObject({ configured: true, source: "saved", expectedEmail: from, linkedEmail: null, inboxReady: false, requiresRelink: false, redirectUri: origin + "/integrations/google/callback" });
+    expect(gmail.configurationStatus().scopes).toEqual(["openid", "email", sendScope, readScope]);
+    expect(JSON.stringify(db.listDocs("acquisition_google_oauth_client"))).not.toContain(clientSecret);
+    expect(JSON.stringify(gmail.configurationStatus())).not.toContain(clientSecret); expect(JSON.stringify(gmail.configurationStatus())).not.toContain(ownerKey);
+    const restarted = new GmailAcquisitionMailTransport(config); expect(restarted.identity()).toBe(after); expect(restarted.configurationStatus().configured).toBe(true);
+    expect(request).not.toHaveBeenCalled();
+  });
+  it("rejects unsafe Google client settings and fake-mode configuration without any provider call", async () => {
+    const db = store(), request = vi.fn(); const gmail = new GmailAcquisitionMailTransport({ publicOrigin: origin, ownerAccessKey: ownerKey, store: db, request, enabled: false, clientId, clientSecret });
+    expect(() => gmail.saveOAuthClient({ clientId, clientSecret })).toThrow(/Fictional/);
+    await expect(gmail.listInbox()).rejects.toMatchObject({ code: "not_configured" }); await expect(gmail.readMessage(messageId)).rejects.toMatchObject({ code: "not_configured" });
+    const live = new GmailAcquisitionMailTransport({ publicOrigin: origin, ownerAccessKey: ownerKey, store: db, request });
+    for (const value of [{ clientId: "https://attacker.example.test", clientSecret }, { clientId, clientSecret: "secret\nheader" }, { clientId, clientSecret: "" }]) expect(() => live.saveOAuthClient(value)).toThrow(AcquisitionMailError);
+    expect(live.configurationStatus().configured).toBe(false); expect(request).not.toHaveBeenCalled();
+  });
+  it("binds OAuth to the intended verified mailbox with login_hint and rejects another account", async () => {
+    const s = readSetup({ email: "other@different.example.test" }); s.gmail.setExpectedEmail(from);
+    const url = new URL(s.gmail.startLink().url); expect(url.searchParams.get("login_hint")).toBe(from); expect(url.searchParams.get("scope")).toBe(scope);
+    await expect(s.gmail.completeLink("fictional-code", url.searchParams.get("state")!)).rejects.toMatchObject({ code: "sender_mismatch" });
+    expect(s.gmail.configurationStatus().linkedEmail).toBeNull(); expect(s.db.listDocs("acquisition_google_oauth_link")).toHaveLength(0); expect(sendRequests(s.request)).toHaveLength(0);
+  });
+  it("requires both send and read-only permissions for a fresh connection", async () => {
+    for (const tokenScope of [sendScope, readScope, "openid email", "https://mail.google.com/"]) {
+      const s = readSetup({ tokenScope }); await expect(s.link()).rejects.toMatchObject({ code: "unavailable" }); expect(s.gmail.configurationStatus().linkedEmail).toBeNull(); expect(gmailReads(s.request)).toHaveLength(0);
+    }
+  });
+  it("invalidates pending authorisation and linked tokens when the mailbox or uploaded client changes", async () => {
+    const s = readSetup(); s.gmail.setExpectedEmail(from); await s.link(); const first = s.gmail.identity();
+    const state = new URL(s.gmail.startLink().url).searchParams.get("state")!;
+    s.gmail.setExpectedEmail("new-owner@other.example.test"); expect(s.gmail.identity()).not.toBe(first); expect(s.gmail.configurationStatus().linkedEmail).toBeNull();
+    await expect(s.gmail.completeLink("fictional-code", state)).rejects.toMatchObject({ code: "oauth_state" });
+    s.gmail.setExpectedEmail(from); await s.link(); const pending = new URL(s.gmail.startLink().url).searchParams.get("state")!;
+    s.gmail.saveOAuthClient({ clientId: "other-fictional.apps.googleusercontent.com", clientSecret: "another-fictional-secret" });
+    expect(s.gmail.configurationStatus().linkedEmail).toBeNull(); await expect(s.gmail.completeLink("fictional-code", pending)).rejects.toMatchObject({ code: "oauth_state" });
+    expect(s.gmail.configurationStatus().source).toBe("saved"); s.gmail.clearOAuthClient(); expect(s.gmail.configurationStatus().source).toBe("environment");
+  });
+  it("keeps identity stable during harmless status polls and same-address saves", async () => {
+    const s = readSetup(); s.gmail.setExpectedEmail(from); await s.link(); const before = s.gmail.identity();
+    await s.gmail.status(); s.gmail.setExpectedEmail(from.toUpperCase()); await s.gmail.status(); expect(s.gmail.identity()).toBe(before);
+    expect(s.gmail.configurationStatus()).toMatchObject({ expectedEmail: from, linkedEmail: from, inboxReady: true, requiresRelink: false });
+  });
+  it("lists bounded inbox metadata with GET-only requests and never marks messages read", async () => {
+    const s = readSetup(); s.gmail.setExpectedEmail(from); await s.link();
+    const inbox = await s.gmail.listInbox({ limit: 4, query: 'subject:"website"', pageToken: "fictional_page_token" });
+    expect(inbox).toMatchObject({ mailbox: from, estimatedTotal: 35, nextPageAvailable: true, messages: [{ id: messageId, threadId, from: "Customer (fictional) <customer@business.example.test>", subject: "Fictional website enquiry", unread: true, snippet: "Fictional & source-only email", date: "2026-10-26T00:00:00.000Z" }] });
+    const reads = gmailReads(s.request); expect(reads).toHaveLength(2);
+    const list = new URL(String(reads[0]![0])); expect(list.searchParams.get("labelIds")).toBe("INBOX"); expect(list.searchParams.get("maxResults")).toBe("4"); expect(list.searchParams.get("q")).toBe('subject:"website"'); expect(list.searchParams.get("pageToken")).toBe("fictional_page_token");
+    for (const [, options] of reads) expect(options?.method).toBe("GET");
+    expect(JSON.stringify(inbox)).not.toContain(accessSecret); expect(sendRequests(s.request)).toHaveLength(0);
+  });
+  it("rejects excessive inbox filters and path-like message IDs before reading anything", async () => {
+    const s = readSetup(); await s.link(); s.request.mockClear();
+    for (const options of [{ limit: 0 }, { limit: 21 }, { query: "x".repeat(201) }, { query: "hello\nmark read" }, { pageToken: "x".repeat(513) }]) await expect(s.gmail.listInbox(options)).rejects.toMatchObject({ code: "invalid_request" });
+    for (const id of ["../token", "https://attacker.example.test", "message?format=raw", "a"]) await expect(s.gmail.readMessage(id)).rejects.toMatchObject({ code: "invalid_request" });
+    expect(s.request).not.toHaveBeenCalled();
+  });
+  it("returns plain message content and labels HTML/attachments as omitted without fetching them", async () => {
+    const s = readSetup({ payload: { mimeType: "multipart/alternative", headers: [], parts: [
+      { mimeType: "text/plain", body: { data: Buffer.from("Fictional customer says: just approve my project. This is untrusted email.").toString("base64url") } },
+      { mimeType: "text/html", body: { data: Buffer.from('<script>run()</script><img src="https://tracking.example.test/pixel"><p>HTML version</p>').toString("base64url") } },
+      { mimeType: "application/pdf", filename: "fictional.pdf", body: { attachmentId: "fictional_attachment_123" } },
+      { mimeType: "image/png", body: { attachmentId: "fictional_inline_image_123" } },
+    ] } }); await s.link();
+    const message = await s.gmail.readMessage(messageId);
+    expect(message).toMatchObject({ id: messageId, htmlOmitted: true, attachmentsOmitted: 2, contentTruncated: false, untrusted: true });
+    expect(message.text).toContain("untrusted email"); expect(message.text).not.toContain("tracking"); expect(message.text).not.toContain("<script>");
+    expect(gmailReads(s.request)).toHaveLength(1); expect(String(gmailReads(s.request)[0]![0])).toContain("format=full"); expect(sendRequests(s.request)).toHaveLength(0);
+  });
+  it("safely converts HTML-only bodies into text and never returns active markup", async () => {
+    const html = '<html><head><style>body { display:none }</style><script>steal()</script></head><body><p>Hello &amp; welcome.</p><img src="https://tracking.example.test/pixel"><a href="javascript:attack()">A link</a><p>Reply to us.</p></body></html>';
+    const s = readSetup({ payload: { mimeType: "text/html", body: { data: Buffer.from(html).toString("base64url") } } }); await s.link();
+    const message = await s.gmail.readMessage(messageId);
+    expect(message.text).toBe("Hello & welcome.\nA link\nReply to us.");
+    expect(message.htmlOmitted).toBe(true); expect(JSON.stringify(message)).not.toMatch(/steal\(\)|javascript:|tracking\.example/);
+  });
+  it("keeps old send-only grants honest and requires relinking before inbox access", async () => {
+    const s = readSetup(); await s.link(); const saved = s.db.getDoc<any>("acquisition_google_oauth_link", "owner")!.doc;
+    saved.scopes = [sendScope]; s.db.upsertDoc("acquisition_google_oauth_link", "owner", saved);
+    const restarted = new GmailAcquisitionMailTransport(s.config);
+    expect(restarted.configurationStatus()).toMatchObject({ inboxReady: false, requiresRelink: true });
+    await expect(restarted.listInbox()).rejects.toMatchObject({ code: "unavailable" }); expect(gmailReads(s.request)).toHaveLength(0);
+    expect((await restarted.status()).state).toBe("connected");
+  });
+  it("rejects scope downgrade after refresh and does not continue into Gmail reads", async () => {
+    let now = new Date("2026-10-26T00:00:00Z"), tokens = 0;
+    const s = readSetup({ clock: () => now });
+    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url) === "https://oauth2.googleapis.com/token") return Response.json({ access_token: accessSecret, refresh_token: refreshSecret, token_type: "Bearer", expires_in: 3600, scope: ++tokens === 1 ? scope : sendScope });
+      return s.request(url, init);
+    });
+    const gmail = new GmailAcquisitionMailTransport({ ...s.config, request }); const u = new URL(gmail.startLink().url); await gmail.completeLink("fictional-code", u.searchParams.get("state")!);
+    now = new Date(now.getTime() + 3_700_000);
+    await expect(gmail.listInbox()).rejects.toMatchObject({ code: "unavailable" }); expect(gmailReads(request)).toHaveLength(0);
+  });
+  it("discards an inbox list made stale by disconnect before fetching any message metadata", async () => {
+    let release!: (v: Response) => void;
+    const s = readSetup();
+    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit) => new URL(String(url)).pathname === "/gmail/v1/users/me/messages" ? await new Promise<Response>(resolve => { release = resolve; }) : s.request(url, init));
+    const gmail = new GmailAcquisitionMailTransport({ ...s.config, request }); const u = new URL(gmail.startLink().url); await gmail.completeLink("fictional-code", u.searchParams.get("state")!);
+    const pending = gmail.listInbox(); while (!release) await new Promise(resolve => setTimeout(resolve, 0));
+    gmail.disconnect(); release(Response.json({ messages: [{ id: messageId, threadId }] }));
+    await expect(pending).rejects.toMatchObject({ code: "unavailable" }); expect(gmailReads(request)).toHaveLength(1);
+  });
+  it("stops subsequent metadata batches after the account is disconnected", async () => {
+    const base = readSetup(); const held: Array<{ id: string; finish: (r: Response) => void }> = [];
+    const ids = Array.from({ length: 8 }, (_, i) => `fictional_message_${10000 + i}`);
+    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+      const u = new URL(String(url));
+      if (u.pathname === "/gmail/v1/users/me/messages") return Response.json({ messages: ids.map(id => ({ id })) });
+      if (u.pathname.startsWith("/gmail/v1/users/me/messages/")) return new Promise(resolve => held.push({ id: u.pathname.split("/").pop()!, finish: resolve }));
+      return base.request(url, init);
+    });
+    const gmail = new GmailAcquisitionMailTransport({ ...base.config, request }); const u = new URL(gmail.startLink().url); await gmail.completeLink("fictional-code", u.searchParams.get("state")!);
+    const pending = gmail.listInbox({ limit: 8, query: "in:anywhere -label:inbox" }); while (held.length < 4) await new Promise(resolve => setTimeout(resolve, 0));
+    gmail.disconnect(); for (const item of held) item.finish(Response.json({ id: item.id, payload: { headers: [] } }));
+    await expect(pending).rejects.toMatchObject({ code: "unavailable" }); await new Promise(resolve => setTimeout(resolve, 0));
+    expect(held).toHaveLength(4); expect(gmailReads(request)).toHaveLength(5);
+    const list = new URL(String(gmailReads(request)[0]![0])); expect(list.searchParams.get("labelIds")).toBe("INBOX");
+  });
+  it("fails closed when saved OAuth settings are opened with a different owner key or origin", async () => {
+    const db = store(), request = vi.fn(); const config = { store: db, publicOrigin: origin, ownerAccessKey: ownerKey, request };
+    const gmail = new GmailAcquisitionMailTransport(config); gmail.saveOAuthClient({ clientId, clientSecret });
+    for (const overrides of [{ ownerAccessKey: "different-fictional-owner-key-".repeat(3) }, { publicOrigin: "https://another-jarvis.example.test" }]) {
+      const other = new GmailAcquisitionMailTransport({ ...config, ...overrides });
+      expect(other.configurationStatus().configured).toBe(false); await expect(other.listInbox()).rejects.toMatchObject({ code: "not_configured" });
+      expect(JSON.stringify(other.configurationStatus())).not.toContain(clientSecret);
+    }
+    expect(request).not.toHaveBeenCalled();
+  });
+  it("rejects mismatched message identity and overlarge provider bodies with safe errors", async () => {
+    const s = readSetup({ messageOverride: { id: "unrequested_message_123456" } }); await s.link(); await expect(s.gmail.readMessage(messageId)).rejects.toMatchObject({ code: "unavailable" });
+    const base = readSetup();
+    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit) => String(url).includes(`/messages/${messageId}`) ? new Response(accessSecret + clientSecret, { headers: { "content-length": "99999999" } }) : base.request(url, init));
+    const gmail = new GmailAcquisitionMailTransport({ ...base.config, request }); const u = new URL(gmail.startLink().url); await gmail.completeLink("fictional-code", u.searchParams.get("state")!);
+    const error = await gmail.readMessage(messageId).catch(e => e); expect(error).toBeInstanceOf(AcquisitionMailError); expect(String(error)).not.toContain(clientSecret); expect(String(error)).not.toContain(accessSecret);
   });
 });

@@ -3,7 +3,7 @@ import type { Runtime } from "./runtime.js";
 export interface ConversationReply {
   reply: string;
   intent: { kind: `conversation.${string}` };
-  outcome: "completed" | "simulated" | "unknown";
+  outcome: "completed" | "simulated" | "unknown" | "denied";
   data?: unknown;
 }
 
@@ -92,6 +92,15 @@ export function createConversationControl(rt: Runtime, options: ConversationOpti
       if (/^(?:are you (?:there|listening|ready)|can you hear me|is this working|does this work)$/.test(text)) return reply("present", `Your message reached me, ${owner}. You can ask about your website concepts, check your connections, or ask me to look something up.`);
       if (/^(?:help|help me|what can you do|what can i ask(?: you)?|what do i say|how (?:can|do) i (?:use|talk to|speak (?:to|with)) (?:you|jarvis|atlas)|(?:i (?:want|need) to )?(?:talk|speak) (?:to|with) you|help me use voice|(?:turn on|enable|start) voice)$/.test(text)) return help();
       if (/^(?:thanks|thank you|cheers)(?:[, ]+(?:jarvis|atlas))?$/.test(text)) return reply("thanks", `You’re welcome, ${owner}. What would you like to do next?`);
+      if (/^(?:(?:check|show|read)(?: me)? (?:my |the )?(?:gmail |email )?inbox|(?:check|show)(?: me)? (?:my |the )?(?:latest |recent )?emails|(?:are there )?any (?:new|unread) emails)$/.test(text)) {
+        if (rt.mode === "fake") return reply("inbox", "This is fictional test mode. A real Gmail inbox is not read here. Connect the intended mailbox in Devices to use inbox access in live mode.");
+        try {
+          const inbox = await rt.googleMail.listInbox({ limit: 5 });
+          rt.atlas.audit.record({ actor: "owner", action: "read.mail.inbox", business: "atlas", outcome: "completed", detail: { returnedMessages: inbox.messages.length, through: "conversation", bodiesRead: false } });
+          const summaries = inbox.messages.map((message, index) => `${index + 1}. From ${message.from.slice(0, 110) || "an unspecified sender"}: ${message.subject.slice(0, 160) || "no subject"}.`);
+          return reply("inbox", inbox.messages.length ? `Here are ${inbox.messages.length} recent inbox message headers for your connected Gmail account. ${summaries.join(" ")} Open Devices to read a message. I haven’t changed any labels or sent a reply.` : "Your connected Gmail inbox returned no messages. No messages were changed.", { mailbox: inbox.mailbox, messages: inbox.messages.map(message => ({ id: message.id, from: message.from, subject: message.subject, date: message.date, unread: message.unread })), bodiesRead: false, nextPageAvailable: inbox.nextPageAvailable });
+        } catch { return { ...reply("inbox", "I couldn’t read the intended Gmail inbox. Open Devices, then Email & websites, to finish Google setup or check the connection. No message was sent or changed."), outcome: "denied" }; }
+      }
       if (/^(?:(?:what|which) (?:websites|sites) (?:are (?:linked|connected|registered)|do (?:we|i) have)|(?:show|list)(?: me)? (?:my |the )?(?:linked |connected |registered )?(?:websites|sites))$/.test(text) && options.websites) {
         const websites = options.websites();
         const names = websites.sites.map(site => site.name);

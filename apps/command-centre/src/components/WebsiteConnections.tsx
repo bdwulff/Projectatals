@@ -3,6 +3,7 @@ import { ArrowUpRight, CheckCheck, ExternalLink, FolderGit2, Globe2, KeyRound, L
 import { ApiError, SESSION_EXPIRED_EVENT, relTime } from "../api";
 import { acquisition, type AcquisitionMailProviders } from "../acquisition-client";
 import { Card, Chip, ErrorBanner } from "./ui";
+import { GmailConnection } from "./GmailConnection";
 import "./website-connections.css";
 
 type ConnectionState = "connected" | "not_connected" | "error" | "fake";
@@ -117,7 +118,8 @@ export function WebsiteConnections() {
           {email && <div className="wc-mail-services">{email.providers.map(item => <div key={item.id}><span>{item.id === "resend" ? "Own domain · Resend" : "Gmail / Google Workspace"}{item.selected && <small>Selected</small>}</span><span className={`wc-service-state${item.status.state === "connected" ? " is-connected" : ""}`}>{item.status.state === "connected" ? "Connected" : item.status.state === "fake" ? "Fictional" : item.status.state === "error" ? "Needs attention" : "Not connected"}</span></div>)}</div>}
           <p className="wc-muted">{selectedMail?.status.detail ?? "Checking the configured sending services."}</p>
           <a href="#pipeline" className="wc-primary-link">Go to Studio email setup<ArrowUpRight size={14} aria-hidden /></a>
-          <p className="wc-footnote">In Studio, open <strong>Sender settings</strong>. These connections send approved messages; inbox reading is a separate connection. Resend does not read your mailbox.</p>
+          <p className="wc-footnote">In Studio, open <strong>Sender settings</strong> to review approved outgoing messages. Link Gmail and read its inbox in the panel below. Resend handles outgoing email only.</p>
+          <a href="#gmail-connection" className="wc-primary-link" onClick={event => { event.preventDefault(); document.getElementById("gmail-connection")?.scrollIntoView({ block: "start" }); }}>Gmail setup & inbox<ArrowUpRight size={14} aria-hidden /></a>
         </article>
         <article className="wc-provider">
           <div className="wc-provider-heading"><div><span className="wc-icon"><FolderGit2 size={19} aria-hidden /></span><h3>Lovable workspace</h3></div><Chip tone={linked ? "ok" : lovable?.state === "fake" ? "fake" : lovable?.state === "error" ? "warn" : "neutral"}>{connectionLabel(lovable?.state)}</Chip></div>
@@ -138,6 +140,8 @@ export function WebsiteConnections() {
           <p className="wc-capability"><ShieldCheck size={13} aria-hidden />Project list & status. Building, code editing and deployment need a separate authorised connection.</p>
         </article>
       </div>
+
+      <GmailConnection onChanged={() => void refreshSaved()} />
 
       <div className="wc-sites-heading"><div><h3>Your websites</h3><p>Keep the public website and its project references together.</p></div><span>{snapshot?.sites.length ?? 0} saved</span></div>
       {loading && !snapshot ? <p role="status" className="wc-empty"><Loader2 size={16} className="wc-spinner" aria-hidden />Loading website connections…</p> : snapshot?.sites.length ? <div className="wc-site-grid">{snapshot.sites.map(site => {

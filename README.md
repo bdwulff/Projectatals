@@ -158,6 +158,12 @@ website/project/repository links with manual public-page checks. Read-only
 project metadata is separate from code editing, publishing and private business
 data. See [EMAIL-AND-WEBSITE-CONNECTIONS.md](docs/EMAIL-AND-WEBSITE-CONNECTIONS.md).
 
+The Gmail panel supports the selected mailbox’s read-only inbox and approved
+sending, with an encrypted Web OAuth client upload and exact Google identity
+binding. Reads are manual and messages are shown as inert text. Say “Check my
+inbox” for recent headers after connecting. See
+[GMAIL-CONNECTION.md](docs/GMAIL-CONNECTION.md) for one-time Google setup.
+
 Build the Mac download after the dashboard production build:
 
 ```sh

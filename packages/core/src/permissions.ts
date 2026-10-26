@@ -15,6 +15,8 @@ export type ActionKind =
   | "read.device.status"
   | "read.device.files"
   | "read.records"
+  | "read.mail.inbox"
+  | "read.mail.message"
   | "read.website"
   | "read.boxsafe.orders"
   | "read.boxsafe.members"
@@ -54,6 +56,8 @@ const LEVELS: Record<ActionKind, PermissionLevel> = {
   "read.device.status": PermissionLevel.Read,
   "read.device.files": PermissionLevel.Read,
   "read.records": PermissionLevel.Read,
+  "read.mail.inbox": PermissionLevel.Read,
+  "read.mail.message": PermissionLevel.Read,
   "read.website": PermissionLevel.Read,
   "read.boxsafe.orders": PermissionLevel.Read,
   "read.boxsafe.members": PermissionLevel.Read,

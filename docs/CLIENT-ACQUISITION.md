@@ -58,34 +58,37 @@ supports it. The five-minute scheduler checks eligibility; this is not continuou
 monitoring. A configured `TAVILY_API_KEY` uses its account allowance; leave it
 unset for the initial free keyless path. No key was provisioned or paid plan bought.
 
-## Connect Gmail for actual hosted sending
+## Connect Gmail for sending and inbox reading
 
 The Gmail connector in ChatGPT is separate from the running Railway application.
-Jarvis implements Google OAuth using HTTPS, send-only Gmail permission plus
-OpenID/email identity, PKCE and an expiring one-use state. Refresh credentials
-are encrypted on the volume with a key derived from the owner key. Changing
-that key requires relinking. Tokens never appear in the browser or source.
+Jarvis uses Google OAuth with HTTPS, Gmail read-only and send permissions,
+OpenID/email identity, PKCE and an expiring one-use state. Its expected mailbox
+is private owner configuration. A different verified Google identity is rejected.
+Client secrets and refresh credentials are encrypted using the owner key; tokens
+are never returned to browser code. Changing that key requires reconnecting.
 
-The private **Sender setup → Google connection setup** panel links to a complete
-in-app guide. The steps are:
+Open **Devices → Email & websites → Gmail connection**. Save the intended address,
+then use its setup wizard:
 
 1. Choose/create a Google Cloud project and [enable Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com).
-2. Configure Google Auth Platform and add the intended sending account as a test
-   user while testing. Request OpenID/email and
-   `https://www.googleapis.com/auth/gmail.send`.
+2. Configure Google Auth Platform for External/Testing with the intended mailbox
+   as a test user. Add OpenID/email, `gmail.readonly` and `gmail.send` scopes.
 3. Create a Web application OAuth client with redirect URI
    `https://atlas-command-centre-production.up.railway.app/integrations/google/callback`.
-4. Save `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` privately in the existing
-   Railway service, then deploy the settings. Do not paste secrets into chat.
-5. Open Sender setup, press **Connect Gmail**, and sign in to the mailbox intended
-   for Wulff Studio outreach. The returned Google identity must match the sender.
+4. Download the Web client's JSON and upload/save it in Jarvis's private setup
+   panel. Existing `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` Railway variables
+   remain an alternative. Do not paste secrets into chat.
+5. Choose **Connect Gmail**, sign in as the exact intended mailbox, and grant
+   read/send access. Linking performs no email submission or automatic inbox read.
+6. Choose **Refresh inbox** to read headers, then select a message for plain text.
+   Approved prospect messages remain in Studio's exact-version send workflow.
 
-A separate free Gmail account can keep Wulff Studio separate from BoxSafe. No
-mailbox was created and no sender account was selected on the owner's behalf.
-Google external apps in testing commonly receive seven-day refresh grants for
-Gmail scopes; follow Google's publication/verification rules for a lasting
-connection. Local disconnect deletes stored credentials; Google account settings
-can revoke the grant itself.
+No Gmail account is created. The mailbox address is selected by the owner and
+stored privately. Google external apps in Testing commonly need reconnecting
+seven days after consent; follow Google's publishing/verification requirements
+for lasting access. Local disconnect deletes the stored grant, and Google Account
+permissions can revoke it at the provider. Existing send-only grants require a
+relink to add inbox access. See [GMAIL-CONNECTION.md](GMAIL-CONNECTION.md).
 
 Official references: [Gmail sending](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/send),
 [Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes),
