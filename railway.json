@@ -2,7 +2,7 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "RAILPACK",
-    "buildCommand": "pnpm --filter @atlas/core build && pnpm --filter @atlas/api build && pnpm --filter @atlas/command-centre build"
+    "buildCommand": "pnpm --filter @atlas/core build && pnpm --filter @atlas/api build && pnpm --filter @atlas/command-centre build && node apps/local-agent/package-mac.mjs"
   },
   "deploy": {
     "startCommand": "node --no-warnings apps/api/dist/server.js",

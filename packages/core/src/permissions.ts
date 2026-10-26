@@ -12,6 +12,8 @@ export enum PermissionLevel {
 
 export type ActionKind =
   // Level 1 — Read
+  | "read.device.status"
+  | "read.device.files"
   | "read.records"
   | "read.website"
   | "read.boxsafe.orders"
@@ -25,6 +27,9 @@ export type ActionKind =
   | "prepare.code_change"
   | "prepare.fulfilment_summary"
   // Level 3 — Execute approved routine actions
+  | "execute.owner_speech"
+  | "execute.device.open_browser"
+  | "execute.device.open_app"
   | "execute.internal_notification"
   | "execute.schedule_job"
   | "execute.record_update"
@@ -45,6 +50,8 @@ export type ActionKind =
   | "human.medical_or_eligibility_decision";
 
 const LEVELS: Record<ActionKind, PermissionLevel> = {
+  "read.device.status": PermissionLevel.Read,
+  "read.device.files": PermissionLevel.Read,
   "read.records": PermissionLevel.Read,
   "read.website": PermissionLevel.Read,
   "read.boxsafe.orders": PermissionLevel.Read,
@@ -56,6 +63,9 @@ const LEVELS: Record<ActionKind, PermissionLevel> = {
   "prepare.design_concept": PermissionLevel.Prepare,
   "prepare.code_change": PermissionLevel.Prepare,
   "prepare.fulfilment_summary": PermissionLevel.Prepare,
+  "execute.owner_speech": PermissionLevel.ExecuteRoutine,
+  "execute.device.open_browser": PermissionLevel.ExecuteRoutine,
+  "execute.device.open_app": PermissionLevel.ExecuteRoutine,
   "execute.internal_notification": PermissionLevel.ExecuteRoutine,
   "execute.schedule_job": PermissionLevel.ExecuteRoutine,
   "execute.record_update": PermissionLevel.ExecuteRoutine,

@@ -1,3 +1,5 @@
+import { installDeviceRoutes } from "./devices.js";
+import { createOwnerVoice, installVoiceRoutes } from "./voice.js";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { buildDailyBoxSafeBriefing } from "@atlas/core";
@@ -16,6 +18,8 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   });
   app.use("/api/*", bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ error: "Request body too large." }, 413) }));
   installOwnerAuth(app, rt, authOptions);
+  installVoiceRoutes(app, createOwnerVoice(rt));
+  const deviceControl = installDeviceRoutes(app, rt);
   app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
   app.get("/api/status", async (c) => {
@@ -77,7 +81,7 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   app.post("/api/command", async (c) => {
     const body = (await c.req.json()) as { text: string };
     if (!body?.text?.trim()) return c.json({ error: "text required" }, 400);
-    const r = await atlas.handleCommand(body.text);
+    const r = await deviceControl.handleCommand(c, body.text) ?? await atlas.handleCommand(body.text);
     const speech = atlas.deps.speech ? await atlas.deps.speech.speak(r.reply) : null;
     return c.json({ ...r, speech });
   });

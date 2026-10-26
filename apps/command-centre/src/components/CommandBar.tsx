@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, MicOff, Send, Volume2, VolumeX } from "lucide-react";
 import { api, type CommandResult } from "../api";
+import { cloudVoiceStatus, requestCloudVoice, type CloudVoiceStatus } from "../voice";
 
 interface Turn {
   id: number;
@@ -34,6 +35,14 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [speak, setSpeak] = useState(false);
+  const [cloudVoice, setCloudVoice] = useState<CloudVoiceStatus | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState<number | null>(null);
+  const [audioUrls, setAudioUrls] = useState<Record<number, string>>({});
+  const generatedAudio = useRef<string[]>([]);
+  const voiceRequestIds = useRef<Record<number, string>>({});
+  const [voiceRecoveryTurn, setVoiceRecoveryTurn] = useState<number | null>(null);
+  const player = useRef<HTMLAudioElement | null>(null);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const Recognition = getRecognition();
@@ -42,6 +51,37 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [turns]);
+
+  useEffect(() => {
+    let active = true;
+    void cloudVoiceStatus().then(status => { if (active) setCloudVoice(status); }).catch(() => {});
+    return () => { active = false; player.current?.pause(); for (const url of generatedAudio.current) URL.revokeObjectURL(url); };
+  }, []);
+
+  const playCloudVoice = async (turn: Turn, generateAgain = false) => {
+    if (voiceBusy !== null) return;
+    setVoiceError(null);
+    let url = audioUrls[turn.id];
+    try {
+      if (!url) {
+        if (!cloudVoice?.providerAvailable || !cloudVoice.enabled) throw new Error("ElevenLabs is not connected and enabled. Use the device voice button.");
+        setVoiceBusy(turn.id);
+        if (generateAgain || !voiceRequestIds.current[turn.id]) voiceRequestIds.current[turn.id] = crypto.randomUUID();
+        const audio = await requestCloudVoice(turn.text, voiceRequestIds.current[turn.id]!);
+        url = URL.createObjectURL(audio);
+        generatedAudio.current.push(url);
+        setAudioUrls(current => ({ ...current, [turn.id]: url! }));
+        setVoiceRecoveryTurn(null);
+      }
+      player.current?.pause();
+      window.speechSynthesis?.cancel();
+      player.current = new Audio(url);
+      await player.current.play();
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : "Voice playback failed. Try the audio controls to replay existing audio without generating it again.");
+      if (!url) setVoiceRecoveryTurn(turn.id);
+    } finally { setVoiceBusy(null); }
+  };
 
   const say = (t: string) => {
     if (!speak || !ttsSupported) return;
@@ -123,6 +163,17 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
                   {t.outcome.replace("_", " ")}{t.approvalId ? " · see Approvals" : ""}
                 </div>
               )}
+              {t.role === "atlas" && cloudVoice?.providerAvailable && cloudVoice.enabled && (
+                <div className="mt-2 space-y-1">
+                  <button type="button" className="btn-ghost !px-2 !py-1 text-xs" disabled={voiceBusy !== null || (!audioUrls[t.id] && t.text.length > cloudVoice.limits.maxCharactersPerRequest)} onClick={() => void playCloudVoice(t)}>
+                    <Volume2 className="h-3.5 w-3.5" aria-hidden />
+                    {voiceBusy === t.id ? "Preparing voice…" : audioUrls[t.id] ? "Replay ElevenLabs voice" : voiceRequestIds.current[t.id] ? "Recover existing voice preview" : "Play ElevenLabs · uses credits"}
+                  </button>
+                  {voiceRecoveryTurn === t.id && !audioUrls[t.id] && <button type="button" className="ml-2 text-[11px] text-slate-400 underline" disabled={voiceBusy !== null} onClick={() => void playCloudVoice(t, true)}>Generate a new preview · uses credits</button>}
+                  {t.text.length > cloudVoice.limits.maxCharactersPerRequest && !audioUrls[t.id] && <p className="text-[11px] text-slate-400">This reply exceeds the cloud voice length limit. Device voice remains available.</p>}
+                  {audioUrls[t.id] && <audio className="h-8 max-w-full" controls preload="none" src={audioUrls[t.id]}>Your browser does not support audio playback.</audio>}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -144,6 +195,10 @@ export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void
           <Send className="h-4 w-4" aria-hidden />
         </button>
       </form>
+      <p className="text-[11px] text-slate-400">
+        {cloudVoice?.providerAvailable && cloudVoice.enabled ? `ElevenLabs${cloudVoice.voiceName ? ` · ${cloudVoice.voiceName}` : ""} is ready for previews. “Play ElevenLabs” sends that reply to the provider and uses credits. The speaker toggle uses device voice.` : "The speaker toggle uses device voice. ElevenLabs is not connected or enabled yet."}
+      </p>
+      {voiceError && <p role="alert" className="text-xs text-danger-soft">{voiceError}</p>}
       {(!Recognition || !ttsSupported) && (
         <p className="text-[11px] text-slate-500">
           {!Recognition ? "Voice dictation is not available in this browser. " : ""}

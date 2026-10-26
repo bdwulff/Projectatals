@@ -9,15 +9,16 @@ import { Pipeline } from "./screens/Pipeline";
 import { BoxSafe } from "./screens/BoxSafe";
 import { Finance } from "./screens/Finance";
 import { OwnerLogin } from "./components/OwnerLogin";
+import { Devices } from "./screens/Devices";
 
 const TAB_KEY = "atlas.tab";
 
 function readTab(): Tab {
   try {
     const h = window.location.hash.replace("#", "") as Tab;
-    if (["overview", "approvals", "pipeline", "boxsafe", "finance"].includes(h)) return h;
+    if (["overview", "approvals", "pipeline", "boxsafe", "finance", "devices"].includes(h)) return h;
     const s = window.localStorage.getItem(TAB_KEY) as Tab | null;
-    if (s && ["overview", "approvals", "pipeline", "boxsafe", "finance"].includes(s)) return s;
+    if (s && ["overview", "approvals", "pipeline", "boxsafe", "finance", "devices"].includes(s)) return s;
   } catch {
     /* storage unavailable */
   }
@@ -112,7 +113,7 @@ function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass }
       <aside className="hidden md:block">
         <div className="sticky top-6 space-y-6">
           <div className="px-3">
-            <div className="text-lg font-semibold tracking-[0.35em] text-slate-50">ATLAS</div>
+            <div className="text-lg font-semibold tracking-[0.35em] text-slate-50">JARVIS</div>
             <div className="label mt-0.5">Command centre</div>
           </div>
           <SideRail tab={tab} onChange={navigate} badges={badges} />
@@ -133,6 +134,7 @@ function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass }
         {tab === "pipeline" && <Pipeline />}
         {tab === "boxsafe" && <BoxSafe />}
         {tab === "finance" && <Finance />}
+        {tab === "devices" && <Devices />}
       </main>
       <BottomTabs tab={tab} onChange={navigate} badges={badges} />
     </div>

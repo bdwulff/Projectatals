@@ -1,7 +1,7 @@
-import { BadgeCheck, Building2, GitBranch, LayoutDashboard, PiggyBank } from "lucide-react";
+import { BadgeCheck, Building2, GitBranch, Laptop, LayoutDashboard, PiggyBank } from "lucide-react";
 import type { ReactNode } from "react";
 
-export type Tab = "overview" | "approvals" | "pipeline" | "boxsafe" | "finance";
+export type Tab = "overview" | "approvals" | "pipeline" | "boxsafe" | "finance" | "devices";
 
 export const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <LayoutDashboard className="h-5 w-5" aria-hidden /> },
@@ -9,12 +9,13 @@ export const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   { id: "pipeline", label: "Pipeline", icon: <GitBranch className="h-5 w-5" aria-hidden /> },
   { id: "boxsafe", label: "BoxSafe", icon: <Building2 className="h-5 w-5" aria-hidden /> },
   { id: "finance", label: "Finance", icon: <PiggyBank className="h-5 w-5" aria-hidden /> },
+  { id: "devices", label: "Devices", icon: <Laptop className="h-5 w-5" aria-hidden /> },
 ];
 
 export function BottomTabs({ tab, onChange, badges }: { tab: Tab; onChange: (t: Tab) => void; badges: Partial<Record<Tab, number>> }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-ink-950/80 backdrop-blur-xl md:hidden" style={{ paddingBottom: "var(--safe-bottom)" }} aria-label="Primary">
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-6">
         {TABS.map((t) => {
           const active = t.id === tab;
           const badge = badges[t.id];

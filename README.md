@@ -99,3 +99,30 @@ using `.mcp.json.example` and `docs/AUTOMATION-SETUP.md`.
 live configuration and a Brave Search key; it never contacts clients or creates
 quotes. `docs/INITIAL-RESEARCH.md` contains a separately sourced first shortlist.
 `docs/LIVE-RESEARCH.md` explains the provider and evidence limits.
+
+## Private Jarvis on Mac and iPhone
+
+The owner dashboard can be used from anywhere after Railway account authorisation
+and deployment. Install it on iPhone with Safari → Share → Add to Home Screen.
+The **Devices** tab provides the Mac companion download, one-use pairing and scoped
+remote requests. The Mac makes outbound HTTPS requests; no inbound home-network
+port or publicly reachable local control server is required.
+
+After pairing, say/type `Jarvis, open https://example.com`, `open Notes on my Mac`
+(if Notes is enabled locally), or `check my Mac`. Queued is not executed; the
+Devices screen shows the companion's acknowledgement. The Mac must be awake and
+the helper running. Browser navigation/click verification and blanket iPhone app
+control are not implemented. Local selected-folder reads never become cloud tasks.
+See `docs/LOCAL-DEVICE-AGENT.md` and `docs/DEVICE-CAPABILITIES.md`.
+
+Explicit **Play ElevenLabs** reply buttons use the configured owner voice, with
+server-side credentials, character caps and no automatic regeneration after
+ambiguous submissions. The browser/device voice is labelled separately. No cloud
+voice is connected until the owner's account key and voice ID are configured and
+verified. See `docs/ELEVENLABS-VOICE.md`.
+
+Build the Mac download after the dashboard production build:
+
+```sh
+node apps/local-agent/package-mac.mjs
+```

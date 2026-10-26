@@ -76,3 +76,32 @@ The experimentation ceiling remains A$300.
 Provider prices, installation IDs and primary-source links are in
 `INTEGRATION-SOURCES.md`. Railway trial limits and ongoing usage, Twilio rental and
 calls, and a search provider plan need an account-specific estimate before activation.
+
+## Private Jarvis continuation
+
+Brandon confirmed a Mac and private sign-in from anywhere, and reports paying for
+Railway. That does not transfer Railway authorisation to this session: remote
+connector reads still returned an authentication request, and a CLI device-code
+flow was started. No working hosted domain or deployment success is asserted yet.
+The paid plan's amount and remaining A$300 balance have not been verified.
+
+Implemented in this continuation:
+
+- Explicit ElevenLabs reply previews using its official API, server-side key,
+  verified configured voice, durable one-attempt jobs and character caps. No live
+  account access, generation or credit use occurred; credentials remain required.
+- An installable Jarvis web-app manifest/icon and an authenticated Mac ZIP download.
+- A runnable Mac companion with a local-only authenticated UI and outbound HTTPS
+  pairing/polling. Initial actions are device status, public website launch and
+  locally enabled Notes/Calendar/Calculator launch. Selected-folder reads stay local.
+- One-use expiring pairing codes; hashed scoped device keys; revocation; immutable
+  request IDs; durable job publication; single task leases; local duplicate journal.
+- Owner text/dictated commands for the initial Mac actions and honest queued/result
+  reporting. No on-Mac installation, live pairing or app/browser control test occurred.
+- No general mouse/keyboard control, autonomous browser clicking, incoming phone
+  conversation or unrestricted iPhone app control is claimed. iPhone actions depend
+  on supported Shortcuts/App Intents and Apple permissions.
+
+`ELEVENLABS-VOICE.md`, `LOCAL-DEVICE-AGENT.md` and `DEVICE-CAPABILITIES.md` contain
+setup details and primary sources. The server remains one replica with a persistent
+volume and HTTPS owner login. Never put provider keys or Mac device keys in chat.

@@ -18,3 +18,7 @@ export * from "./briefing.js";
 export * from "./orchestrator.js";
 
 export * from "./adapters/research.js";
+
+export * from "./adapters/live/elevenlabs.js";
+
+export { isPublicAddress } from "./adapters/live/website-checker.js";

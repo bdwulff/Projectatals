@@ -111,6 +111,8 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@22.20.5)
 
+  apps/local-agent: {}
+
   packages/core:
     devDependencies:
       '@types/node':

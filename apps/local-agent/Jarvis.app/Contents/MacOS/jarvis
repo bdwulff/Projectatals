@@ -1,0 +1,4 @@
+#!/bin/zsh
+set -euo pipefail
+HELPER_ROOT="${0:A:h}/../../.."
+exec /usr/bin/open -a Terminal "$HELPER_ROOT/Start Jarvis.command"
