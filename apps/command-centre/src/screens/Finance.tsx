@@ -28,7 +28,7 @@ export function Finance() {
         </div>
         <RefreshButton onClick={() => void fin.refresh()} loading={fin.loading} updatedAt={fin.updatedAt} />
       </header>
-      <ErrorBanner message={fin.error} />
+      {fin.error && !f ? <Card label="Financial data" title="Waiting for verified figures."><p className="text-sm leading-relaxed text-slate-400">Jarvis couldn’t retrieve the records needed for this report. Check your business connections, then refresh this page.</p><a href="#overview" className="mt-4 inline-block text-xs text-accent-soft hover:underline">Review connections on Overview →</a></Card> : <ErrorBanner message={fin.error} />}
       {!f && !fin.error && <Loading label="Loading finance" />}
       {f && (
         <>

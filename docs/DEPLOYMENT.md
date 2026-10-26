@@ -23,9 +23,11 @@ Live HTTP verification passed:
 - Authenticated status reports live mode with actual connection states.
 - Authenticated Mac ZIP download returns200 and passes ZIP CRC validation.
 
-No physical Mac installation, live Mac pairing, device automation, ElevenLabs
-synthesis or phone call has been performed. Those require the owner's device or
-provider setup. No BoxSafe or Stripe financial result is claimed.
+No physical Mac installation, live Mac pairing, device automation or phone call
+has been performed here. Those require the owner's device or provider setup.
+The owner has since configured ElevenLabs: the hosted read-only voice check
+passed, explicit playback is enabled, and the owner confirmed playback works.
+No BoxSafe or Stripe financial result is claimed.
 
 ## Owner setup
 
@@ -43,8 +45,9 @@ limits and the explicit Play button.
 
 ## Still disconnected at verification
 
-ElevenLabs, BoxSafe, Stripe, Brave Search, Resend, Twilio and ntfy had no verified
-live credentials. Website checking is available; that capability state does not
+BoxSafe, Stripe, Brave Search, Resend, Twilio and ntfy have no verified live
+credentials. ElevenLabs is verified separately through `/api/voice/status`.
+Website checking is available; that capability state does not
 assert an arbitrary site's reachability. Scheduled checks run, and the dashboard
 shows connection failures. Daily discovery remains disabled until a search provider
 is authorised. No customer outreach or production BoxSafe write was enabled.

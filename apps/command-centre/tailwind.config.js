@@ -7,8 +7,8 @@ export default {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
       },
       colors: {
-        ink: { 950: "#06080c", 900: "#0a0d14", 800: "#10151f", 700: "#171e2b" },
-        accent: { DEFAULT: "#22d3ee", soft: "#67e8f9", dim: "#0e7490" },
+        ink: { 950: "#060c10", 900: "#0a131b", 800: "#101e28", 700: "#172b37" },
+        accent: { DEFAULT: "#7de8f3", soft: "#a1edf5", dim: "#397c8b" },
         warn: { DEFAULT: "#f59e0b", soft: "#fbbf24" },
         danger: { DEFAULT: "#ef4444", soft: "#f87171" },
         ok: { DEFAULT: "#34d399", soft: "#6ee7b7" },

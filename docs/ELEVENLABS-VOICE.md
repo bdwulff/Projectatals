@@ -2,8 +2,10 @@
 
 This implementation adds an explicit owner audio preview. A configured voice is
 verified using a read before any generation. It does not clone voices, place calls,
-create an ElevenLabs agent or activate a subscription. No live ElevenLabs request
-or generation was made during implementation; mocked tests establish code behaviour.
+create an ElevenLabs agent or activate a subscription. On 26 October the hosted
+service verified the configured George voice with a real read-only provider
+request. Explicit playback is enabled, and the owner confirmed it works. UI
+verification does not generate audio or consume provider credits.
 
 ## Connect the account
 
@@ -36,12 +38,15 @@ The supported models are `eleven_multilingual_v2` and `eleven_flash_v2_5`.
 
 ## Use it
 
-In the authenticated command centre, each assistant reply has a
+In the authenticated command centre, open Overview and use the central Jarvis
+console. Each assistant reply in its command log has a
 **Play ElevenLabs · uses credits** button when the configured voice is ready and
 enabled. Clicking it explicitly sends that reply text to ElevenLabs. Polling,
 notifications, receiving a command result and opening the dashboard never generate
 cloud speech. The existing speaker toggle uses the device/browser voice and is
-labelled separately.
+labelled separately. The core changes state only when the microphone starts,
+a request is processing or audio is actually playing. It is not a wake-word
+listener. Command/Ctrl+K focuses the text input; Escape stops dictation.
 
 Audio is returned as MPEG to the signed-in browser. A replay button/audio controls
 reuse already generated audio. A browser that blocks initial playback can use

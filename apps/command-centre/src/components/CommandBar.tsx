@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Send, Volume2, VolumeX } from "lucide-react";
+import { ArrowUpRight, AudioLines, Check, ChevronRight, CircleAlert, LockKeyhole, Mic, MicOff, PackageSearch, ScanSearch, Sunrise, Volume2, VolumeX } from "lucide-react";
 import { api, type CommandResult } from "../api";
 import { cloudVoiceStatus, requestCloudVoice, type CloudVoiceStatus } from "../voice";
+import { JarvisCore, type JarvisState } from "./JarvisCore";
 
 interface Turn {
   id: number;
@@ -16,195 +17,331 @@ interface SpeechRecognitionLike {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
+  onstart: (() => void) | null;
   onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
   onend: (() => void) | null;
   onerror: ((ev: unknown) => void) | null;
   start: () => void;
   stop: () => void;
+  abort?: () => void;
 }
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
 function getRecognition(): SpeechRecognitionCtor | null {
+  if (typeof window === "undefined") return null;
   const w = window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
+
+const quickCommands = [
+  { label: "Morning briefing", command: "Give me my morning briefing", icon: Sunrise },
+  { label: "BoxSafe orders", command: "What orders have come through BoxSafe?", icon: PackageSearch },
+  { label: "Find businesses", command: "Find five businesses around Berwick", icon: ScanSearch },
+];
 
 export function CommandBar({ onResult }: { onResult?: (r: CommandResult) => void }) {
   const [text, setText] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
+  const [micPending, setMicPending] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [interactionError, setInteractionError] = useState<string | null>(null);
   const [speak, setSpeak] = useState(false);
+  const deviceSpeechEnabled = useRef(false);
   const [cloudVoice, setCloudVoice] = useState<CloudVoiceStatus | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voiceBusy, setVoiceBusy] = useState<number | null>(null);
   const [audioUrls, setAudioUrls] = useState<Record<number, string>>({});
   const generatedAudio = useRef<string[]>([]);
+  const voiceInFlight = useRef(false);
+  const mounted = useRef(true);
   const voiceRequestIds = useRef<Record<number, string>>({});
   const [voiceRecoveryTurn, setVoiceRecoveryTurn] = useState<number | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
+  const audioElements = useRef<Record<number, HTMLAudioElement | null>>({});
+  const pendingPlaybackTurn = useRef<number | null>(null);
+  const utterance = useRef<SpeechSynthesisUtterance | null>(null);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const commandInput = useRef<HTMLInputElement>(null);
   const Recognition = getRecognition();
   const ttsSupported = typeof window !== "undefined" && "speechSynthesis" in window;
+  const cloudReady = Boolean(cloudVoice?.providerAvailable && cloudVoice.enabled);
+  const coreState: JarvisState = listening ? "listening" : busy || voiceBusy !== null ? "working" : speaking ? "speaking" : voiceError || interactionError ? "error" : "idle";
+  const stateHeading = coreState === "listening" ? "I'm listening." : coreState === "working" ? "On it." : coreState === "speaking" ? "Here's your update." : coreState === "error" ? "Let's check that." : "At your service.";
+  const stateDetail = listening ? "Microphone active · speak your command" : busy ? "Processing your command" : voiceBusy !== null ? "Preparing your ElevenLabs preview" : speaking ? "Voice playback in progress" : voiceError || interactionError ? "See the response below" : micPending ? "Waiting for microphone access" : Recognition ? "Tap the core to speak, or type below" : "Type a command below to begin";
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [turns]);
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: reduceMotion ? "auto" : "smooth" });
+  }, [turns, busy]);
 
   useEffect(() => {
     let active = true;
+    mounted.current = true;
     void cloudVoiceStatus().then(status => { if (active) setCloudVoice(status); }).catch(() => {});
-    return () => { active = false; player.current?.pause(); for (const url of generatedAudio.current) URL.revokeObjectURL(url); };
+    return () => {
+      active = false;
+      mounted.current = false;
+      player.current?.pause();
+      const recognition = recRef.current;
+      recRef.current = null;
+      if (recognition) { recognition.onstart = recognition.onend = recognition.onerror = recognition.onresult = null; try { recognition.abort ? recognition.abort() : recognition.stop(); } catch { /* Already stopped. */ } }
+      utterance.current = null;
+      window.speechSynthesis?.cancel();
+      for (const url of generatedAudio.current) URL.revokeObjectURL(url);
+    };
   }, []);
 
+  const stopMic = () => {
+    const recognition = recRef.current;
+    recRef.current = null;
+    if (recognition) { try { recognition.abort ? recognition.abort() : recognition.stop(); } catch { /* Already stopped. */ } }
+    setListening(false);
+    setMicPending(false);
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && recRef.current) { event.preventDefault(); stopMic(); return; }
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k" || event.altKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement && target !== commandInput.current)) return;
+      event.preventDefault();
+      commandInput.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const stopPlayback = () => {
+    player.current?.pause();
+    player.current = null;
+    utterance.current = null;
+    window.speechSynthesis?.cancel();
+    setSpeaking(false);
+  };
+
+  const prepareAudio = (audio: HTMLAudioElement) => {
+    stopMic();
+    if (player.current && player.current !== audio) player.current.pause();
+    utterance.current = null;
+    window.speechSynthesis?.cancel();
+    setSpeaking(false);
+    player.current = audio;
+  };
+
+  const playExistingAudio = (audio: HTMLAudioElement) => {
+    prepareAudio(audio);
+    void audio.play().catch(() => {
+      if (player.current !== audio) return;
+      setSpeaking(false);
+      setVoiceError("Audio is ready. Tap its play control below to start playback; no new generation is needed.");
+    });
+  };
+
+  useEffect(() => {
+    const id = pendingPlaybackTurn.current;
+    if (id === null) return;
+    const audio = audioElements.current[id];
+    if (!audio) return;
+    pendingPlaybackTurn.current = null;
+    playExistingAudio(audio);
+  }, [audioUrls]);
+
   const playCloudVoice = async (turn: Turn, generateAgain = false) => {
-    if (voiceBusy !== null) return;
+    if (voiceInFlight.current || voiceBusy !== null) return;
     setVoiceError(null);
-    let url = audioUrls[turn.id];
+    setInteractionError(null);
+    const existing = audioElements.current[turn.id];
+    if (audioUrls[turn.id] && existing) { playExistingAudio(existing); return; }
     try {
-      if (!url) {
-        if (!cloudVoice?.providerAvailable || !cloudVoice.enabled) throw new Error("ElevenLabs is not connected and enabled. Use the device voice button.");
-        setVoiceBusy(turn.id);
-        if (generateAgain || !voiceRequestIds.current[turn.id]) voiceRequestIds.current[turn.id] = crypto.randomUUID();
-        const audio = await requestCloudVoice(turn.text, voiceRequestIds.current[turn.id]!);
-        url = URL.createObjectURL(audio);
-        generatedAudio.current.push(url);
-        setAudioUrls(current => ({ ...current, [turn.id]: url! }));
-        setVoiceRecoveryTurn(null);
-      }
-      player.current?.pause();
-      window.speechSynthesis?.cancel();
-      player.current = new Audio(url);
-      await player.current.play();
+      if (!cloudVoice?.providerAvailable || !cloudVoice.enabled) throw new Error("ElevenLabs is not connected and enabled. Device voice remains available.");
+      stopMic();
+      stopPlayback();
+      voiceInFlight.current = true;
+      setVoiceBusy(turn.id);
+      if (generateAgain || !voiceRequestIds.current[turn.id]) voiceRequestIds.current[turn.id] = crypto.randomUUID();
+      const audio = await requestCloudVoice(turn.text, voiceRequestIds.current[turn.id]!);
+      if (!mounted.current) return;
+      const url = URL.createObjectURL(audio);
+      generatedAudio.current.push(url);
+      pendingPlaybackTurn.current = turn.id;
+      setAudioUrls(current => ({ ...current, [turn.id]: url }));
+      setVoiceRecoveryTurn(null);
     } catch (error) {
-      setVoiceError(error instanceof Error ? error.message : "Voice playback failed. Try the audio controls to replay existing audio without generating it again.");
-      if (!url) setVoiceRecoveryTurn(turn.id);
-    } finally { setVoiceBusy(null); }
+      if (!mounted.current) return;
+      setVoiceError(error instanceof Error ? error.message : "Voice playback failed. Recover the existing preview before generating another.");
+      setVoiceRecoveryTurn(turn.id);
+    } finally { voiceInFlight.current = false; if (mounted.current) setVoiceBusy(null); }
   };
 
   const say = (t: string) => {
-    if (!speak || !ttsSupported) return;
+    if (!deviceSpeechEnabled.current || !ttsSupported) return;
     try {
-      window.speechSynthesis.cancel();
+      stopMic();
+      stopPlayback();
       const u = new SpeechSynthesisUtterance(t);
+      utterance.current = u;
       u.lang = "en-AU";
       u.rate = 1.02;
+      u.onstart = () => { if (utterance.current === u) setSpeaking(true); };
+      u.onend = u.onerror = () => { if (utterance.current === u) { utterance.current = null; setSpeaking(false); } };
       window.speechSynthesis.speak(u);
-    } catch {
-      /* unsupported voice; ignore */
-    }
+    } catch { setSpeaking(false); }
   };
 
   const submit = async (raw?: string) => {
     const q = (raw ?? text).trim();
     if (!q || busy) return;
+    stopMic();
+    stopPlayback();
+    setInteractionError(null);
+    setVoiceError(null);
     setText("");
     setBusy(true);
     const id = Date.now();
-    setTurns((t) => [...t, { id, role: "owner", text: q }]);
+    setTurns(t => [...t, { id, role: "owner", text: q }]);
     try {
       const r = await api.command(q);
-      setTurns((t) => [...t, { id: id + 1, role: "atlas", text: r.reply, outcome: r.outcome, approvalId: r.approvalId }]);
+      setTurns(t => [...t, { id: id + 1, role: "atlas", text: r.reply, outcome: r.outcome, approvalId: r.approvalId }]);
+      if (r.outcome === "failed" || r.outcome === "denied") setInteractionError("The command needs attention. See Jarvis's response in the command log.");
       say(r.reply);
       onResult?.(r);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setTurns((t) => [...t, { id: id + 1, role: "atlas", text: `I couldn't reach the Atlas API: ${msg}`, outcome: "failed" }]);
-    } finally {
-      setBusy(false);
-    }
+      setTurns(t => [...t, { id: id + 1, role: "atlas", text: `I couldn't reach the Atlas API: ${msg}`, outcome: "failed" }]);
+      setInteractionError("I couldn't complete that command. Check the response and try again.");
+    } finally { setBusy(false); }
   };
 
   const toggleMic = () => {
-    if (!Recognition) return;
-    if (listening) {
-      recRef.current?.stop();
-      setListening(false);
-      return;
-    }
+    if (!Recognition || busy || voiceBusy !== null) return;
+    if (listening || micPending) { stopMic(); return; }
+    stopPlayback();
+    setInteractionError(null);
+    setVoiceError(null);
     const rec = new Recognition();
     rec.lang = "en-AU";
     rec.interimResults = false;
     rec.continuous = false;
-    rec.onresult = (ev) => {
+    rec.onstart = () => {
+      if (recRef.current !== rec) { try { rec.abort ? rec.abort() : rec.stop(); } catch { /* Cancel a recogniser that started after cancellation. */ } return; }
+      setMicPending(false);
+      setListening(true);
+    };
+    rec.onresult = ev => {
+      if (recRef.current !== rec) return;
       const transcript = Array.from({ length: ev.results.length }, (_, i) => ev.results[i]?.[0]?.transcript ?? "").join(" ").trim();
       if (transcript) void submit(transcript);
     };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recRef.current = rec;
-    try {
-      rec.start();
-      setListening(true);
-    } catch {
+    rec.onend = () => { if (recRef.current === rec) { recRef.current = null; setListening(false); setMicPending(false); } };
+    rec.onerror = () => {
+      if (recRef.current !== rec) return;
+      recRef.current = null;
       setListening(false);
-    }
+      setMicPending(false);
+      setInteractionError("The microphone couldn't capture a command. Check browser microphone access, or type below.");
+    };
+    recRef.current = rec;
+    setMicPending(true);
+    try { rec.start(); }
+    catch { recRef.current = null; setMicPending(false); setInteractionError("The microphone couldn't start. You can still type your command."); }
   };
 
-  const outcomeTone = (o?: string) =>
-    o === "awaiting_approval" ? "text-warn-soft" : o === "denied" || o === "failed" ? "text-danger-soft" : o === "simulated" ? "text-fuchsia-200" : "text-slate-400";
+  const toggleDeviceSpeech = () => {
+    const next = !deviceSpeechEnabled.current;
+    deviceSpeechEnabled.current = next;
+    if (!next) { utterance.current = null; window.speechSynthesis.cancel(); if (!player.current || player.current.paused) setSpeaking(false); }
+    setSpeak(next);
+  };
+
+  const micLabel = !Recognition ? "Voice dictation is unavailable in this browser" : listening || micPending ? "Stop microphone dictation" : "Start microphone dictation";
 
   return (
-    <div className="flex flex-col gap-3">
-      <div ref={listRef} className="max-h-72 space-y-2 overflow-y-auto pr-1" aria-live="polite">
-        {turns.length === 0 && (
-          <p className="text-sm text-slate-400">
-            Ask Atlas anything. Try <button type="button" className="text-accent-soft underline-offset-2 hover:underline" onClick={() => void submit("Give me my morning briefing")}>“Give me my morning briefing”</button> or{" "}
-            <button type="button" className="text-accent-soft underline-offset-2 hover:underline" onClick={() => void submit("What orders have come through BoxSafe?")}>“What orders have come through BoxSafe?”</button>
-          </p>
-        )}
-        {turns.map((t) => (
-          <div key={t.id} className={`flex ${t.role === "owner" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${t.role === "owner" ? "bg-accent/15 text-slate-100" : "border border-white/10 bg-white/5 text-slate-200"}`}>
-              {t.text}
-              {t.role === "atlas" && t.outcome && (
-                <div className={`mt-1 text-[10px] uppercase tracking-wider ${outcomeTone(t.outcome)}`}>
-                  {t.outcome.replace("_", " ")}{t.approvalId ? " · see Approvals" : ""}
-                </div>
-              )}
-              {t.role === "atlas" && cloudVoice?.providerAvailable && cloudVoice.enabled && (
-                <div className="mt-2 space-y-1">
-                  <button type="button" className="btn-ghost !px-2 !py-1 text-xs" disabled={voiceBusy !== null || (!audioUrls[t.id] && t.text.length > cloudVoice.limits.maxCharactersPerRequest)} onClick={() => void playCloudVoice(t)}>
-                    <Volume2 className="h-3.5 w-3.5" aria-hidden />
-                    {voiceBusy === t.id ? "Preparing voice…" : audioUrls[t.id] ? "Replay ElevenLabs voice" : voiceRequestIds.current[t.id] ? "Recover existing voice preview" : "Play ElevenLabs · uses credits"}
-                  </button>
-                  {voiceRecoveryTurn === t.id && !audioUrls[t.id] && <button type="button" className="ml-2 text-[11px] text-slate-400 underline" disabled={voiceBusy !== null} onClick={() => void playCloudVoice(t, true)}>Generate a new preview · uses credits</button>}
-                  {t.text.length > cloudVoice.limits.maxCharactersPerRequest && !audioUrls[t.id] && <p className="text-[11px] text-slate-400">This reply exceeds the cloud voice length limit. Device voice remains available.</p>}
-                  {audioUrls[t.id] && <audio className="h-8 max-w-full" controls preload="none" src={audioUrls[t.id]}>Your browser does not support audio playback.</audio>}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-        {busy && <div className="text-xs text-slate-400">Atlas is working…</div>}
+    <section className={`jc-command jc-command--${coreState}`} aria-label="Jarvis command interface">
+      <div className="jc-command__topline">
+        <span className="jc-eyebrow"><span className="jc-status-dot" /> Personal intelligence</span>
+        <span className="jc-owner-badge"><LockKeyhole size={11} aria-hidden="true" /> Owner session</span>
       </div>
-      <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-        <button type="button" onClick={toggleMic} disabled={!Recognition} className={`btn-ghost !px-2.5 ${listening ? "border-accent/60 text-accent-soft shadow-glow" : ""}`}
-          aria-label={Recognition ? (listening ? "Stop listening" : "Dictate a command") : "Voice dictation not supported in this browser"}
-          title={Recognition ? (listening ? "Stop listening" : "Dictate") : "Voice dictation not supported in this browser"}>
-          {Recognition ? <Mic className="h-4 w-4" aria-hidden /> : <MicOff className="h-4 w-4" aria-hidden />}
+      <div className="jc-command__identity">
+        <h2>J.A.R.V.I.S.</h2>
+        <span>Powered by Atlas</span>
+      </div>
+
+      <div className="jc-stage">
+        <div className="jc-stage__readout jc-stage__readout--left" aria-hidden="true">
+          <span className="jc-readout-label">Input</span>
+          <strong>{listening ? "Mic active" : "On demand"}</strong>
+          <span className="jc-readout-line" />
+          <small>{Recognition ? "Voice + text" : "Text commands"}</small>
+        </div>
+        <JarvisCore state={coreState} interactive={Boolean(Recognition)} onActivate={toggleMic} disabled={busy || voiceBusy !== null} label={micLabel} />
+        <div className="jc-stage__readout jc-stage__readout--right" aria-hidden="true">
+          <span className="jc-readout-label">Voice</span>
+          <strong>{cloudReady ? "ElevenLabs" : "Device voice"}</strong>
+          <span className="jc-readout-line" />
+          <small>{cloudReady ? "Ready to play" : ttsSupported ? "Available" : "Text output"}</small>
+        </div>
+      </div>
+      <div className="jc-command__state" role="status" aria-live="polite">
+        <h3>{stateHeading}</h3>
+        <p>{stateDetail}</p>
+      </div>
+
+      <div className="jc-shortcuts" aria-label="Quick commands">
+        {quickCommands.map(({ label, command, icon: Icon }) => <button key={label} type="button" onClick={() => void submit(command)} disabled={busy}>
+          <Icon size={14} strokeWidth={1.5} aria-hidden="true" /><span>{label}</span><ArrowUpRight size={12} className="jc-shortcuts__arrow" aria-hidden="true" />
+        </button>)}
+      </div>
+
+      {turns.length > 0 && <div className="jc-log">
+        <div className="jc-log__heading"><span className="jc-eyebrow">Command log</span><span>This session</span></div>
+        <div ref={listRef} className="jc-log__scroll" role="log" aria-live="polite" aria-label="Conversation with Jarvis">
+          {turns.map(t => <article key={t.id} className={`jc-turn jc-turn--${t.role}`}>
+            <div className="jc-turn__meta"><span>{t.role === "owner" ? "You" : "Jarvis"}</span>{t.role === "atlas" && t.outcome && <span className={`jc-outcome jc-outcome--${t.outcome}`}>{t.outcome === "completed" ? <Check size={10} aria-hidden="true" /> : null}{t.outcome.replaceAll("_", " ")}{t.approvalId ? " · see Approvals" : ""}</span>}</div>
+            <p className="jc-turn__text">{t.text}</p>
+            {t.role === "atlas" && cloudReady && <div className="jc-turn__voice">
+              <button type="button" className="jc-voice-action" disabled={voiceBusy !== null || (!audioUrls[t.id] && t.text.length > cloudVoice!.limits.maxCharactersPerRequest)} onClick={() => void playCloudVoice(t)}>
+                <AudioLines size={14} aria-hidden="true" />{voiceBusy === t.id ? "Preparing voice…" : audioUrls[t.id] ? "Replay ElevenLabs voice" : voiceRequestIds.current[t.id] ? "Recover existing voice preview" : "Play ElevenLabs · uses credits"}<ChevronRight size={12} aria-hidden="true" />
+              </button>
+              {voiceRecoveryTurn === t.id && !audioUrls[t.id] && <button type="button" className="jc-voice-regenerate" disabled={voiceBusy !== null} onClick={() => void playCloudVoice(t, true)}>Generate a new preview · uses credits</button>}
+              {t.text.length > cloudVoice!.limits.maxCharactersPerRequest && !audioUrls[t.id] && <p className="jc-voice-note">This reply exceeds the cloud voice length limit. Device voice remains available.</p>}
+              {audioUrls[t.id] && <audio ref={element => { audioElements.current[t.id] = element; }} className="jc-audio" controls preload="none" src={audioUrls[t.id]}
+                onPlay={event => { setVoiceError(null); prepareAudio(event.currentTarget); }}
+                onPlaying={event => { if (player.current === event.currentTarget) setSpeaking(true); }}
+                onWaiting={event => { if (player.current === event.currentTarget) setSpeaking(false); }}
+                onStalled={event => { if (player.current === event.currentTarget) setSpeaking(false); }}
+                onPause={event => { if (player.current === event.currentTarget) setSpeaking(false); }}
+                onEnded={event => { if (player.current === event.currentTarget) { player.current = null; setSpeaking(false); } }}
+                onError={event => { if (player.current === event.currentTarget) { setSpeaking(false); setVoiceError("Audio playback failed. The existing preview can be retried without generating it again."); } }}
+              >Your browser does not support audio playback.</audio>}
+            </div>}
+          </article>)}
+          {busy && <div className="jc-processing"><span /><span /><span /><p>Processing your command</p></div>}
+        </div>
+      </div>}
+
+      <form className="jc-dock" onSubmit={event => { event.preventDefault(); void submit(); }}>
+        <button type="button" onClick={toggleMic} disabled={!Recognition || busy || voiceBusy !== null} className={`jc-dock__mic${listening ? " jc-dock__mic--active" : ""}`} aria-label={micLabel} title={micLabel} aria-pressed={listening}>
+          {Recognition ? <Mic size={18} strokeWidth={1.5} aria-hidden="true" /> : <MicOff size={18} strokeWidth={1.5} aria-hidden="true" />}
         </button>
-        <label className="sr-only" htmlFor="atlas-command">Command for Atlas</label>
-        <input id="atlas-command" className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder={listening ? "Listening…" : "Hey Atlas…"} autoComplete="off" />
-        <button type="button" onClick={() => setSpeak((s) => !s)} disabled={!ttsSupported} className={`btn-ghost !px-2.5 ${speak ? "border-accent/60 text-accent-soft" : ""}`}
-          aria-pressed={speak} aria-label={ttsSupported ? (speak ? "Stop reading replies aloud" : "Read replies aloud") : "Speech output not supported in this browser"} title={ttsSupported ? "Read replies aloud" : "Speech output not supported"}>
-          {speak ? <Volume2 className="h-4 w-4" aria-hidden /> : <VolumeX className="h-4 w-4" aria-hidden />}
-        </button>
-        <button type="submit" className="btn-accent !px-3" disabled={busy || !text.trim()} aria-label="Send command">
-          <Send className="h-4 w-4" aria-hidden />
-        </button>
+        <label className="sr-only" htmlFor="atlas-command">Command for Jarvis</label>
+        <input ref={commandInput} id="atlas-command" value={text} onChange={event => setText(event.target.value)} placeholder={listening ? "Listening to your microphone…" : "Ask Jarvis to do something…"} autoComplete="off" aria-keyshortcuts="Meta+K Control+K" />
+        <span className="jc-dock__enter" title="Focus command input · Command/Ctrl + K" aria-hidden="true">⌘ K</span>
+        <button type="submit" className="jc-dock__send" disabled={busy || !text.trim()} aria-label="Send command"><ArrowUpRight size={19} strokeWidth={1.8} aria-hidden="true" /></button>
       </form>
-      <p className="text-[11px] text-slate-400">
-        {cloudVoice?.providerAvailable && cloudVoice.enabled ? `ElevenLabs${cloudVoice.voiceName ? ` · ${cloudVoice.voiceName}` : ""} is ready for previews. “Play ElevenLabs” sends that reply to the provider and uses credits. The speaker toggle uses device voice.` : "The speaker toggle uses device voice. ElevenLabs is not connected or enabled yet."}
-      </p>
-      {voiceError && <p role="alert" className="text-xs text-danger-soft">{voiceError}</p>}
-      {(!Recognition || !ttsSupported) && (
-        <p className="text-[11px] text-slate-500">
-          {!Recognition ? "Voice dictation is not available in this browser. " : ""}
-          {!ttsSupported ? "Spoken replies are not available in this browser." : ""}
-        </p>
-      )}
-    </div>
+
+      <div className="jc-voice-settings">
+        <span className="jc-voice-settings__provider"><span className={`jc-status-dot${cloudReady ? " jc-status-dot--ready" : " jc-status-dot--muted"}`} />{cloudReady ? `ElevenLabs${cloudVoice?.voiceName ? ` · ${cloudVoice.voiceName}` : ""}` : "Cloud voice unavailable"}</span>
+        <button type="button" onClick={toggleDeviceSpeech} disabled={!ttsSupported} className={`jc-device-toggle${speak ? " jc-device-toggle--on" : ""}`} aria-pressed={speak} aria-label={ttsSupported ? (speak ? "Turn off device voice and stop reading" : "Read new replies aloud using device voice") : "Device voice is unavailable in this browser"}>
+          {speak ? <Volume2 size={13} aria-hidden="true" /> : <VolumeX size={13} aria-hidden="true" />}Device voice <span>{speak ? "on" : "off"}</span>
+        </button>
+      </div>
+      <p className="jc-command__notice">{cloudReady ? "ElevenLabs plays only when you choose. Playback sends that reply to ElevenLabs and uses credits." : "Type to get started. Device voice uses your browser; ElevenLabs needs a connected and enabled account."}</p>
+      {(voiceError || interactionError) && <p role="alert" className="jc-command__error"><CircleAlert size={14} aria-hidden="true" />{voiceError ?? interactionError}</p>}
+      {(!Recognition || !ttsSupported) && <p className="jc-command__notice">{!Recognition ? "Microphone dictation isn't available in this browser. " : ""}{!ttsSupported ? "Device speech isn't available in this browser." : ""}</p>}
+    </section>
   );
 }
