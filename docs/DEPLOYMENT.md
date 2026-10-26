@@ -1,6 +1,6 @@
 # Jarvis hosted deployment
 
-Verified 26 October 2026. Railway reported deployment `8c52a949-e9c4-414a-92ba-980d4d8781cd`
+Verified 26 October 2026. Railway reported deployment `bb350e1c-4dc8-47f2-a715-302aaeb5f1f6`
 **SUCCESS**. This is a CLI source upload, not an unverified queued build.
 
 - App: https://atlas-command-centre-production.up.railway.app
@@ -22,6 +22,14 @@ Live HTTP verification passed:
 - Owner login succeeds and issues a Secure session; logout invalidates access.
 - Authenticated status reports live mode with actual connection states.
 - Authenticated Mac ZIP download returns200 and passes ZIP CRC validation.
+- The deployed Jarvis JavaScript and CSS SHA-256 hashes exactly match the build
+  that passed 131 browser checks across desktop, tablet and phone widths.
+- The read-only ElevenLabs check reports George connected with explicit playback
+  enabled. Release verification generated no audio.
+
+The release includes the responsive voice core, private sign-in, command dock,
+navigation and unavailable-data panels described in [JARVIS-INTERFACE.md](JARVIS-INTERFACE.md).
+All 160 workspace tests and the production build passed before release.
 
 No physical Mac installation, live Mac pairing, device automation or phone call
 has been performed here. Those require the owner's device or provider setup.
