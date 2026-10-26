@@ -1,5 +1,7 @@
 # Atlas installation and operational report — 26 October 2026
 
+> Current update: Railway is now deployed and verified. See [DEPLOYMENT.md](DEPLOYMENT.md) for the live URL, exact validation and remaining provider connections. Earlier sections below record prior setup milestones.
+
 ## DELIVERED
 
 Continued the actual GitHub branch `bdwulff/Projectatals`,
@@ -105,3 +107,24 @@ Implemented in this continuation:
 `ELEVENLABS-VOICE.md`, `LOCAL-DEVICE-AGENT.md` and `DEVICE-CAPABILITIES.md` contain
 setup details and primary sources. The server remains one replica with a persistent
 volume and HTTPS owner login. Never put provider keys or Mac device keys in chat.
+
+
+## Verified hosted result
+
+Railway CLI account access succeeded and production deployment
+`8c52a949-e9c4-414a-92ba-980d4d8781cd` reached SUCCESS. Persistent storage, an HTTPS
+domain and private owner authentication are configured. The live HTTP checks passed
+for health, static app, manifest, unauthenticated route denial, owner login, logout
+revocation and authenticated Mac ZIP download/CRC. The initial Railpack failure was
+fixed by adding the root start script. No additional subscription or telephone
+number was purchased by the agent.
+
+The current full suites pass:92 core,37 API,7 MCP(including real stdio) and24 local
+companion tests. The previous child-process restriction no longer blocks stdio.
+Workspace typechecks and the production cloud build pass. Budget copy now explicitly
+identifies recorded costs and unconnected hosting/provider billing.
+
+The owner still needs to enter ElevenLabs API key and voice ID in Railway Variables.
+Voice remains disabled and disconnected at verification; no synthesis or phone call
+is claimed. Business-data, search, mail, push and telephone connections also remain
+unconfigured. See DEPLOYMENT.md for the exact next actions and current limits.

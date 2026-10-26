@@ -4,12 +4,13 @@
   "version": "0.1.0",
   "description": "ATLAS - autonomous AI executive assistant and business operating system for Wulff Studio and BoxSafe",
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm -r build && node apps/local-agent/package-mac.mjs",
     "test": "pnpm --filter @atlas/core build && pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "dev:api": "pnpm --filter @atlas/api dev",
     "dev:ui": "pnpm --filter @atlas/command-centre dev",
-    "demo": "pnpm --filter @atlas/core --filter @atlas/api build && pnpm --filter @atlas/cli demo"
+    "demo": "pnpm --filter @atlas/core --filter @atlas/api build && pnpm --filter @atlas/cli demo",
+    "start": "node --no-warnings apps/api/dist/server.js"
   },
   "engines": {
     "node": ">=22.13"

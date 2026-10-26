@@ -11,6 +11,11 @@ confirms a real connection.
 
 ## Status
 
+Jarvis is now hosted at https://atlas-command-centre-production.up.railway.app with
+private owner sign-in. See `docs/DEPLOYMENT.md` for verified behaviour and the
+provider connections still required.
+
+
 The existing foundation now includes an owner login, a read-only BoxSafe MCP,
 source-attributed web research, a daily persistent research worker and guarded owner
 call/push adapters. These components are tested locally; provider accounts and live
