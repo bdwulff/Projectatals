@@ -20,6 +20,7 @@ export type ActionKind =
   | "read.boxsafe.members"
   | "read.stripe.payments"
   // Level 2 — Prepare
+  | "prepare.owner_transcription"
   | "prepare.research"
   | "prepare.quote_draft"
   | "prepare.email_draft"
@@ -57,6 +58,7 @@ const LEVELS: Record<ActionKind, PermissionLevel> = {
   "read.boxsafe.orders": PermissionLevel.Read,
   "read.boxsafe.members": PermissionLevel.Read,
   "read.stripe.payments": PermissionLevel.Read,
+  "prepare.owner_transcription": PermissionLevel.Prepare,
   "prepare.research": PermissionLevel.Prepare,
   "prepare.quote_draft": PermissionLevel.Prepare,
   "prepare.email_draft": PermissionLevel.Prepare,

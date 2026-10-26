@@ -3,7 +3,7 @@ import { ArrowDown, ArrowRight, ArrowUpRight, Bell, CheckCheck, ChevronDown, Clo
 import { api, melbourneDate, melbourneTime, type BackgroundTaskState, type Briefing, type Notification, type Status } from "../api";
 import { useNow, usePoll } from "../hooks";
 import { AlertList } from "../components/Alerts";
-import { CommandBar } from "../components/CommandBar";
+import { VoiceInvitation } from "../components/VoiceConversation";
 import { Card, Chip, Done, ErrorBanner, FakeBadge, Loading, RefreshButton, StateDot, stateLabel } from "../components/ui";
 import type { Tab } from "../components/Nav";
 
@@ -57,7 +57,7 @@ export function Overview({ status, approvalCount, onNavigate, onDataChanged }: {
         <div className="jarvis-mission-stat"><span className="jarvis-stat-icon"><PlugZap size={17} aria-hidden /></span><span><span className="jarvis-stat-label">Business connections</span><span className="jarvis-stat-description">Services reporting connected</span></span><strong>{connected === null ? "—" : String(connected).padStart(2, "0")}<small>/{status?.connections.length ?? "—"}</small></strong></div>
       </div>
       <div className="jarvis-hero-grid">
-        <div className="jarvis-command-panel"><CommandBar onResult={refreshAll} /></div>
+        <div className="jarvis-command-panel"><VoiceInvitation /></div>
         <aside className="jarvis-systems-column">
           <Card className="jarvis-systems-card" label="01 / System connections" title="Your connected world" action={<RefreshButton onClick={onDataChanged} />}>
             {!status && <Loading label="Checking connections" />}

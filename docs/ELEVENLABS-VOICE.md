@@ -1,5 +1,10 @@
 # Jarvis voice through ElevenLabs
 
+For microphone input and automatic device spoken replies, see
+[VOICE-INTERACTION.md](VOICE-INTERACTION.md). The optional recording-transcription
+path is separate from the text-to-speech preview described here. Neither browser
+dictation nor normal device replies generate ElevenLabs audio automatically.
+
 This implementation adds an explicit owner audio preview. A configured voice is
 verified using a read before any generation. It does not clone voices, place calls,
 create an ElevenLabs agent or activate a subscription. On 26 October the hosted

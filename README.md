@@ -145,6 +145,13 @@ an initial tap. **Devices → Owner updates** adds optional email alerts, free
 Telegram messages and a morning summary. Connections and delivery preferences
 start disabled. See [BRANDING-AND-UPDATES.md](docs/BRANDING-AND-UPDATES.md).
 
+Use **Talk to Jarvis** from any screen, or open `/#talk`, for microphone input and
+automatic device-voice replies. Allow the microphone in Chrome or Safari, speak
+and pause; enable follow-up listening to continue after each reply. The separate
+recording fallback requires explicit ElevenLabs credit confirmation and a review
+of its transcript before sending. See [VOICE-INTERACTION.md](docs/VOICE-INTERACTION.md)
+for Mac permissions, supported requests and current conversation limits.
+
 Build the Mac download after the dashboard production build:
 
 ```sh

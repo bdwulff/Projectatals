@@ -12,6 +12,7 @@ import { OwnerLogin } from "./components/OwnerLogin";
 import { Devices } from "./screens/Devices";
 import { AutomaticGreeting } from "./components/AutomaticGreeting";
 import { resetGreetingSession } from "./voice";
+import { VoiceConversation } from "./components/VoiceConversation";
 
 const TAB_KEY = "atlas.tab";
 
@@ -155,6 +156,7 @@ function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass, 
         </main>
       </div>
       <BottomTabs tab={tab} onChange={navigate} badges={badges} />
+      <VoiceConversation onResult={onDataChanged} />
     </div>
   );
 }

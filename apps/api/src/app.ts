@@ -1,5 +1,7 @@
 import { installDeviceRoutes } from "./devices.js";
 import { createOwnerVoice, installVoiceRoutes } from "./voice.js";
+import { createOwnerTranscription, installTranscriptionRoutes } from "./transcription.js";
+import { commandSafetyReply, createConversationControl, normaliseSpokenCommand } from "./conversation.js";
 import { installAcquisitionRoutes } from "./acquisition.js";
 import { installOwnerUpdateRoutes } from "./owner-updates.js";
 import { Hono } from "hono";
@@ -18,11 +20,15 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
     c.header("Referrer-Policy", "same-origin");
     await next();
   });
-  app.use("/api/*", bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ error: "Request body too large." }, 413) }));
+  const normalBodyLimit = bodyLimit({ maxSize: 64 * 1024, onError: (c) => c.json({ error: "Request body too large." }, 413) });
+  const audioBodyLimit = bodyLimit({ maxSize: 1536 * 1024, onError: (c) => c.json({ error: "Voice recording is too large. Record a shorter clip." }, 413) });
+  app.use("/api/*", (c, next) => c.req.path === "/api/voice/transcribe" ? audioBodyLimit(c, next) : normalBodyLimit(c, next));
   installOwnerAuth(app, rt, authOptions);
   installVoiceRoutes(app, createOwnerVoice(rt));
+  installTranscriptionRoutes(app, createOwnerTranscription(rt));
   const deviceControl = installDeviceRoutes(app, rt);
   const acquisitionControl = installAcquisitionRoutes(app, rt);
+  const conversationControl = createConversationControl(rt);
   installOwnerUpdateRoutes(app, rt.ownerUpdates);
   app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
@@ -87,7 +93,9 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   app.post("/api/command", async (c) => {
     const body = (await c.req.json()) as { text: string };
     if (!body?.text?.trim()) return c.json({ error: "text required" }, 400);
-    const r = await deviceControl.handleCommand(c, body.text) ?? await acquisitionControl.handleCommand(body.text) ?? await atlas.handleCommand(body.text);
+    const text = normaliseSpokenCommand(body.text);
+    const handled = commandSafetyReply(body.text) ?? await deviceControl.handleCommand(c, text) ?? await acquisitionControl.handleCommand(text) ?? await conversationControl.handleCommand(text) ?? await atlas.handleCommand(text);
+    const r = handled.outcome === "unknown" ? conversationControl.fallback(body.text) : handled;
     const speech = atlas.deps.speech ? await atlas.deps.speech.speak(r.reply) : null;
     return c.json({ ...r, speech });
   });
