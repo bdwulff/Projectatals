@@ -1,17 +1,49 @@
 # Jarvis hosted deployment
 
-> **Discovery program release pending:** the Wulff Digital daily shortlist,
-> original Apple-inspired Clarity demos, matching React source downloads, manual
-> email drafts and installed-device spoken reports are implemented. Full release
-> checks and deployment verification are pending; no live completion is claimed
-> for this update. See [DISCOVERY-PROGRAM.md](DISCOVERY-PROGRAM.md).
+> **Discovery program deployed:** Railway deployment
+> `2fcae55f-49e1-45af-a533-34beee3ad1e8` reached **SUCCESS** on 27 October 2026.
+> All 454 workspace tests, the production build, 165 browser checks and 51 hosted
+> checks passed. The private daily program is enabled for three candidates around
+> south-east Melbourne with the supplied Wulff Digital company identity. See
+> [DISCOVERY-PROGRAM.md](DISCOVERY-PROGRAM.md).
 
-The last verified release is the Gmail update below.
+The first verified hosted report rebuilt three previously researched businesses
+without another search. It produced three private Clarity demos and email drafts,
+with two sourced logos and seven photographs. Each matching eight-file React ZIP
+passed CRC validation and excluded owner credentials and private publication
+tokens. The deployed JavaScript and CSS hashes match the browser-verified build.
+Public concept URLs remained unavailable (HTTP404), no email was accepted or sent,
+and no paid voice request was made. A repeated run retained the same report ID
+and completion timestamp; logout restored HTTP401 on private routes.
+
+A separate read-only refresh of those same three business websites then found
+published contact-email candidates for two businesses, with source provenance and
+**no contact basis established**. The remaining business still lacks a suitable
+logo and a sourced recipient. The refresh made no new discovery search; all three
+drafts remained blocked for sending and all concepts remained unpublished. The
+two-logo/seven-photo totals were retained. A published address is not consent or
+proof that the owner has reviewed the message.
+
+The owner must choose **Enable spoken updates** with Jarvis in the foreground and
+an installed device voice available. Browser checks exercised this behaviour with
+mock speech; no playback through the owner's physical speaker was verified.
+Gmail remains **not connected** pending Google client configuration and consent.
+The company domain is owner-provided identity metadata; no DNS or company-site
+publication was performed by this release. Keyless search limits and existing
+Railway charges still apply.
+
+Current validation: 185 core, 227 API, seven MCP, 24 local-agent and eleven UI unit
+tests; 74 program UI, 45 report-voice and 46 Clarity browser checks. A generated
+React project also passed a real TypeScript check and Vite production build.
+The private hosted verification report is kept outside the repository at
+`/workspace/scratch/discovery-live-verification.json`.
+
+## Previous verified Gmail release
 
 Railway reported Gmail release deployment `889323aa-3f3a-4f1f-b75a-db3fde6e2aaf`
 **SUCCESS** on 26 October 2026. Final live HTTP verification passed all 23 checks;
-the Gmail connection itself remains disconnected without the owner's Google OAuth
-client and consent. The release passed 401 workspace tests and 116 browser checks
+the Gmail connection itself was disconnected without the owner's Google OAuth
+client and consent. That release passed 401 workspace tests and 116 browser checks
 before deployment. See the Gmail release section below.
 
 The preceding connection release, deployment `3233ef8b-578a-42aa-afee-09487732526e`,

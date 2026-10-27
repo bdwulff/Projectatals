@@ -179,13 +179,36 @@ report for the next visit.
 
 ## Validation and release status
 
-Implementation and focused tests are complete; full workspace, browser and hosted
-release verification are pending for this release. Focused evidence includes
-54 renderer/template tests, 38 program/background tests and five independent
-API integration tests. A generated eight-file React project also passed a real
-TypeScript check and Vite production build using existing dependencies. Tests
-use injected providers and fictional records; they do not prove a live search,
-email delivery or speech from the owner's physical devices.
+Railway deployment `2fcae55f-49e1-45af-a533-34beee3ad1e8` reached **SUCCESS** on
+27 October 2026. The production build and all **454 workspace tests** passed:
+185 core, 227 API, seven MCP, 24 local-agent and eleven UI unit tests. All
+**165 browser checks** passed: 74 program UI, 45 report-voice and 46 Clarity checks.
+A generated eight-file React project also passed a real TypeScript check and
+Vite production build using existing dependencies.
+
+All **51 hosted checks** passed, including private authentication and logout,
+exact deployed JavaScript/CSS hashes, persisted daily settings, report deduplication,
+and all three matching ZIP downloads with CRC and secret/token exclusion checks.
+The hosted program is enabled for three daily candidates around south-east
+Melbourne under the supplied Wulff Digital company identity. Its first verified
+report reused three previously researched businesses without another search and
+prepared three private Clarity demos and email drafts, with two sourced logos and
+seven photographs. Those are reused records, not three newly discovered businesses.
+Public concept URLs remained unavailable, no email was accepted or sent, and no
+paid voice request was made. A second run retained the same report ID and
+completion timestamp. Gmail remains disconnected pending the owner's Google setup.
+
+A subsequent read-only refresh of the same three business websites found published
+contact-email candidates for two, with source provenance and **no contact basis
+established**. It made no additional discovery search and retained the two-logo,
+seven-photo totals. The remaining business still lacks a suitable logo and a
+sourced recipient. All three drafts remain blocked for sending and all concepts
+unpublished; these contact candidates are not reviewed send permission or consent.
+
+Browser tests use mock speech and do not prove playback on the owner's physical
+devices. Choose **Enable spoken updates** while Jarvis is in the foreground to
+unlock an installed voice. The private hosted verification report remains outside
+the repository; it is not a source artefact or a public business-results feed.
 
 The current deployment evidence belongs in [DEPLOYMENT.md](DEPLOYMENT.md).
 
