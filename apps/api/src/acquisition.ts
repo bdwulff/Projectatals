@@ -1,8 +1,9 @@
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { AcquisitionError, ResearchUnavailableError } from "@atlas/core";
+import { AcquisitionError, PermissionLevel, requiredLevel, ResearchUnavailableError } from "@atlas/core";
 import { AcquisitionMailError } from "./acquisition-mail.js";
 import type { Runtime } from "./runtime.js";
+import { createSourceZip } from "./source-zip.js";
 
 /** Owner operations stay behind the existing cookie/Origin gate; public tokens grant only one concept or opt-out. */
 export function installAcquisitionRoutes(app: Hono, rt: Runtime) {
@@ -28,6 +29,19 @@ export function installAcquisitionRoutes(app: Hono, rt: Runtime) {
   app.post("/api/acquisition/leads/:id/archive", mutation((input, c) => { fields(input, ["reason"]); if (typeof input.reason !== "string" || input.reason.length < 12 || input.reason.length > 500) throw new AcquisitionError("Provide the reason for removing this candidate from the queue.", 400); return service.archive(c.req.param("id")!, input.reason, rt.atlas.deps.config.ownerName); }));
   app.post("/api/acquisition/prepare-all", mutation(async input => { fields(input, []); const snapshot = await service.snapshot(); for (const record of snapshot.records.filter(r => !r.demo).slice(0, 5)) await service.enrichAndPrepare(record.id); }));
   app.get("/api/acquisition/demos/:id/preview", c => { const result = service.ownerPreview(c.req.param("id")); return result ? preview(c, result, true) : c.text("Concept not found.", 404); });
+  app.get("/api/acquisition/leads/:id/source.zip", c => {
+    try {
+      if (requiredLevel("read.discovery.source") !== PermissionLevel.Read) throw new AcquisitionError("Code downloads are unavailable under the current action policy.", 503);
+      const source = service.sourceProject(c.req.param("id"));
+      const zip = createSourceZip(source.files);
+      const filename = `${source.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "business"}-react-project.zip`;
+      noIndex(c);
+      c.header("Content-Type", "application/zip");
+      c.header("Content-Disposition", `attachment; filename="${filename}"`);
+      rt.atlas.audit.record({ actor: "owner", action: "read.discovery.source", business: "wulff_studio", outcome: "completed", detail: { operation: "code_download", fileCount: Object.keys(source.files).length } });
+      return c.body(new Uint8Array(zip));
+    } catch (error) { return failure(c, error); }
+  });
   app.post("/api/acquisition/google/link", async c => { try { const value: unknown = await c.req.json(); if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length) return c.json({ error: "Provide an empty link request object." }, 400); rt.mailProviders.select("gmail"); return c.json(await rt.googleMail.startLink()); } catch { return c.json({ error: "Open Devices → Email & websites → Gmail setup. Save the intended mailbox and upload your Google Web application client file, then connect Gmail. Google requires its one-time OAuth setup; your Google password stays with Google." }, 503); } });
   app.get("/api/acquisition/google/setup", c => { noIndex(c); return c.html(googleSetup); });
   app.post("/api/acquisition/google/disconnect", async c => { try { const value: unknown = await c.req.json(); if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length) return c.json({ error: "Provide an empty disconnect request object." }, 400); rt.mailProviders.select(rt.mailProviders.selected() ?? "gmail"); await rt.googleMail.disconnect(); return c.json(await service.snapshot()); } catch { return c.json({ error: "The Google connection could not be removed. Try again." }, 503); } });

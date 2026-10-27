@@ -29,6 +29,56 @@ function rawDemo(record: AcquisitionRecord): string { return /\/demos\/([A-Za-z0
 function rawUnsub(record: AcquisitionRecord): string { return /\/unsubscribe\/([A-Za-z0-9_-]+)/.exec(record.draft!.text)![1]!; }
 
 describe("client acquisition domain", () => {
+  it("updates the trusted company identity without changing the email account or erasing owner edits", async () => {
+    const { service, send } = setup();
+    const original = service.prepare(add(service).id);
+    const edited = service.saveDraft(original.id, { expectedHash: original.draft!.contentHash, subject: "Owner's fictional introduction", text: original.draft!.text + "\nMy personally written note." });
+    service.configureCompany({ name: "Wulff Digital (fictional)", website: "https://studio.example.com" });
+    const current = (await service.snapshot()).records[0]!;
+    expect(current.draft!.text).toContain("My personally written note.");
+    expect(current.draft!.subject).toBe(edited.draft!.subject);
+    expect(current.draft!.text).toContain("Wulff Digital (fictional)");
+    expect(current.draft!.text).toContain("https://studio.example.com/");
+    expect(current.draft!.from).toBe(sender.email);
+    expect(current.draft!.contentHash).not.toBe(edited.draft!.contentHash);
+    await expect(service.approveAndSend(current.id, edited.draft!.contentHash, "Brandon")).rejects.toThrow(/version changed/);
+    expect(() => service.configureCompany({ name: "Unsafe", website: "https://127.0.0.1" })).toThrow(/public HTTPS/);
+    expect(service.company().name).toBe("Wulff Digital (fictional)");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("keeps the generated React project private and excludes draft and publication credentials", () => {
+    const { service, store, send } = setup();
+    const legacy = service.prepare(add(service).id);
+    expect(() => service.sourceProject(legacy.id)).toThrow(/Clarity/);
+    store.setMemory("owner.private_secret", "fictional-owner-secret-never-export");
+    service.configureCompany({ name: "Wulff Digital (fictional)", website: "https://studio.example.com" });
+    const record = service.prepare(legacy.id, { templateId: "clarity" });
+    const files = service.sourceProject(record.id).files;
+    const source = JSON.stringify(files);
+    expect(files["src/App.tsx"]).toContain(record.businessName);
+    expect(source).toContain("Wulff Digital (fictional)");
+    expect(source).not.toContain(rawDemo(record));
+    expect(source).not.toContain(rawUnsub(record));
+    expect(source).not.toContain("fictional-owner-secret-never-export");
+    expect(service.publicPreview(rawDemo(record))).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("adopts a public contact candidate as unreviewed data and keeps sending blocked", async () => {
+    const { service, options, atlas, store, send } = setup();
+    const lead = service.addLead({ businessName: "Contact source (fictional)", location: "Berwick", industry: "Plumbing", website: "https://contact.example.com", sourceUrl: "https://contact.example.com", observation: "Fictional public contact adapter test." });
+    options.mode = "live";
+    const prospect = atlas.prospects.require(lead.prospectId); prospect.fixture = false; store.upsertDoc("prospects", prospect.id, prospect);
+    options.enricher = { enrich: async () => ({ state: "partial", detail: "Fictional injected public source", sourceUrl: lead.website!, fetchedAt: "2026-10-26T05:00:00Z", services: [], images: [], notices: [], contactEmail: "hello@contact.example.com", contactSourceUrl: "https://contact.example.com/contact" }) };
+    const result = await service.enrichAndPrepare(lead.id, { templateId: "clarity" });
+    expect(result.contact).toMatchObject({ email: "hello@contact.example.com", basis: "none_established", roleRelevant: false, noMarketingProhibition: false });
+    expect(result.contact?.reviewedBy).toBeUndefined();
+    expect(result.draft?.to).toBe("hello@contact.example.com");
+    await expect(service.approveAndSend(result.id, result.draft!.contentHash, "Brandon")).rejects.toThrow();
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("enriches facts before a private concept and invalidates every old demo/email approval hash", async () => {
     const {service,options,atlas,store,send}=setup();
     const old=service.prepare(add(service).id,{templateId:"folio"});

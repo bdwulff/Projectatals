@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBackgroundWorker, melbourneResearchDay, startBackgroundWorker } from "./background.js";
 import { buildRuntime, type Runtime } from "./runtime.js";
+import { DiscoveryProgram } from "./discovery-program.js";
 
 const enabled = { ATLAS_MODE: "live", ATLAS_RESEARCH_ENABLED: "true", BRAVE_SEARCH_API_KEY: "test-only-not-a-real-key", ATLAS_RESEARCH_AREA: "Berwick, Victoria", ATLAS_RESEARCH_COUNT: "5" };
 const created: Runtime[] = [];
@@ -19,6 +20,28 @@ function runtime(dbPath?: string) {
 afterEach(() => { for (const rt of created.splice(0)) rt.atlas.deps.store.close(); vi.useRealTimers(); });
 
 describe("background research", () => {
+  it("runs the configured private Discovery program instead of a second legacy research job", async () => {
+    const rt = runtime(), clock = () => new Date("2026-10-27T00:00:00Z");
+    rt.discoveryProgram = new DiscoveryProgram({ atlas: rt.atlas, acquisition: rt.acquisition, mode: "live", env: { ATLAS_RESEARCH_PROVIDER: "tavily" }, clock });
+    rt.discoveryProgram.configure({ enabled: true, area: "Berwick, Victoria", industry: "plumbing", count: 3, templateId: "clarity", companyName: "Fictional test studio", companyWebsite: "https://studio.example.com", timeZone: "Australia/Melbourne" });
+    const discover = vi.spyOn(rt.acquisition, "discover").mockResolvedValue([]);
+    const worker = createBackgroundWorker(rt, enabled, { clock });
+    expect((await worker.tick()).research.state).toBe("completed"); expect((await worker.tick()).research.state).toBe("already_ran");
+    expect(discover).toHaveBeenCalledOnce(); expect(rt.atlas.deps.research.find).not.toHaveBeenCalled();
+    expect(rt.atlas.jobs.list().map(job => job.type)).toEqual(["discovery_program"]);
+    expect(rt.fakes.mailer.sent).toHaveLength(0);
+  });
+
+  it("pausing the configured program also closes legacy queued research after restart", async () => {
+    const rt = runtime(), clock = () => new Date("2026-10-27T00:00:00Z");
+    const worker = createBackgroundWorker(rt, enabled, { clock });
+    const queued = rt.atlas.jobs.enqueue("research_prospects", { day: "2026-10-27" }, { idempotencyKey: "research_prospects:2026-10-27:old", maxAttempts: 1, runAfter: clock() });
+    rt.discoveryProgram = new DiscoveryProgram({ atlas: rt.atlas, acquisition: rt.acquisition, mode: "live", env: { ATLAS_RESEARCH_PROVIDER: "tavily" }, clock });
+    rt.discoveryProgram.configure({ enabled: false, area: "Berwick, Victoria", industry: "", count: 3, templateId: "clarity", companyName: "Fictional test studio", companyWebsite: "https://studio.example.com", timeZone: "Australia/Melbourne" });
+    await rt.atlas.jobs.runKey(queued.job.idempotencyKey, clock());
+    expect((await worker.tick()).research.state).toBe("skipped"); expect(rt.atlas.deps.research.find).not.toHaveBeenCalled(); expect(rt.atlas.deps.store.getJobByKey(queued.job.idempotencyKey)?.status).toBe("dead");
+  });
+
   it("can run bounded keyless discovery and private preparation once daily without a paid search key", async () => {
     const rt = runtime();
     const discover = vi.spyOn(rt.acquisition, "discover").mockResolvedValue([]);

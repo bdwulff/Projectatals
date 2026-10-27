@@ -13,6 +13,7 @@ import { Devices } from "./screens/Devices";
 import { AutomaticGreeting } from "./components/AutomaticGreeting";
 import { resetGreetingSession } from "./voice";
 import { VoiceConversation } from "./components/VoiceConversation";
+import { DiscoveryReportVoice } from "./components/DiscoveryReportVoice";
 
 const TAB_KEY = "atlas.tab";
 
@@ -142,6 +143,7 @@ function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass, 
         </header>
         <main id="main-content" tabIndex={-1} className="jarvis-main">
         <AutomaticGreeting sessionId={sessionId} />
+        <DiscoveryReportVoice sessionId={sessionId} />
         {sessionError && <div role="alert" className="glass mb-4 border-danger/40 bg-danger/10 p-3 text-sm text-danger-soft">{sessionError}</div>}
         {status.error && (
           <div role="alert" className="glass mb-4 border-danger/40 bg-danger/10 p-3 text-sm text-danger-soft">Jarvis cannot reach the server. Displayed information may be out of date. {status.error}</div>
@@ -152,7 +154,7 @@ function CommandCentre({ onLogout, signingOut, sessionError, developmentBypass, 
         {tab === "boxsafe" && <BoxSafe />}
         {tab === "finance" && <Finance />}
         {tab === "devices" && <Devices />}
-        <footer className="jarvis-footer"><span>J.A.R.V.I.S <span className="jarvis-footer-divider">/</span> Built around you.</span><span>WULFF STUDIO <span className="jarvis-footer-divider">×</span> BOXSAFE</span></footer>
+        <footer className="jarvis-footer"><span>J.A.R.V.I.S <span className="jarvis-footer-divider">/</span> Built around you.</span><span>WULFF DIGITAL <span className="jarvis-footer-divider">×</span> BOXSAFE</span></footer>
         </main>
       </div>
       <BottomTabs tab={tab} onChange={navigate} badges={badges} />

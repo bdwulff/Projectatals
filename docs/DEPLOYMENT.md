@@ -1,5 +1,13 @@
 # Jarvis hosted deployment
 
+> **Discovery program release pending:** the Wulff Digital daily shortlist,
+> original Apple-inspired Clarity demos, matching React source downloads, manual
+> email drafts and installed-device spoken reports are implemented. Full release
+> checks and deployment verification are pending; no live completion is claimed
+> for this update. See [DISCOVERY-PROGRAM.md](DISCOVERY-PROGRAM.md).
+
+The last verified release is the Gmail update below.
+
 Railway reported Gmail release deployment `889323aa-3f3a-4f1f-b75a-db3fde6e2aaf`
 **SUCCESS** on 26 October 2026. Final live HTTP verification passed all 23 checks;
 the Gmail connection itself remains disconnected without the owner's Google OAuth

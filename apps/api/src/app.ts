@@ -6,6 +6,8 @@ import { installAcquisitionRoutes } from "./acquisition.js";
 import { installOwnerUpdateRoutes } from "./owner-updates.js";
 import { installWebsiteRoutes, WebsiteConnections } from "./websites.js";
 import { installMailRoutes } from "./mail.js";
+import { installDiscoveryProgramRoutes } from "./discovery-program.js";
+import { discoveryCommand } from "./discovery-commands.js";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { buildDailyBoxSafeBriefing } from "@atlas/core";
@@ -35,6 +37,7 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   installOwnerUpdateRoutes(app, rt.ownerUpdates);
   installWebsiteRoutes(app, websiteConnections);
   installMailRoutes(app, rt);
+  installDiscoveryProgramRoutes(app, rt, rt.discoveryProgram);
   app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
   app.get("/api/status", async (c) => {
@@ -101,7 +104,7 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
     const body = (await c.req.json()) as { text: string };
     if (!body?.text?.trim()) return c.json({ error: "text required" }, 400);
     const text = normaliseSpokenCommand(body.text);
-    const handled = commandSafetyReply(body.text) ?? await deviceControl.handleCommand(c, text) ?? await acquisitionControl.handleCommand(text) ?? await conversationControl.handleCommand(text) ?? await atlas.handleCommand(text);
+    const handled = commandSafetyReply(body.text) ?? await discoveryCommand(rt, text) ?? await deviceControl.handleCommand(c, text) ?? await acquisitionControl.handleCommand(text) ?? await conversationControl.handleCommand(text) ?? await atlas.handleCommand(text);
     const r = handled.outcome === "unknown" ? conversationControl.fallback(body.text) : handled;
     const speech = atlas.deps.speech ? await atlas.deps.speech.speak(r.reply) : null;
     return c.json({ ...r, speech });

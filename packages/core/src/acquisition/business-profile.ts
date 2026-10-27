@@ -17,6 +17,9 @@ export interface BusinessProfile {
   description?: string;
   address?: string;
   phone?: string;
+  /** Publicly listed contact candidate only; discovery never establishes permission to email. */
+  contactEmail?: string;
+  contactSourceUrl?: string;
   services: string[];
   logo?: BusinessImage;
   images: BusinessImage[];

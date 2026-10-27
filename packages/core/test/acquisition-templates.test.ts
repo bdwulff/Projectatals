@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { renderDemoWebsite, safeDemoWebsite, type DemoBusinessInput } from "../src/acquisition/demo-renderer.js";
+import { exportDemoReactProject, renderDemoWebsite, safeDemoWebsite, type DemoBusinessInput } from "../src/acquisition/demo-renderer.js";
 import { DEMO_TEMPLATES, getDemoTemplate, selectDemoTemplate } from "../src/acquisition/templates.js";
 import type { BusinessImage, BusinessProfile } from "../src/acquisition/business-profile.js";
 
@@ -102,11 +102,11 @@ describe("free-template concept renderer", () => {
     expect(() => renderDemoWebsite({ ...business, templateId: "unknown" as "fieldwork" })).toThrow(/Unknown/);
   });
 
-  it("uses factual industry categories to choose three genuinely different directions", () => {
+  it("preserves industry choices and adds a distinct explicit Clarity direction", () => {
     expect(selectDemoTemplate("Plumbing").id).toBe("fieldwork");
     expect(selectDemoTemplate("Personal training").id).toBe("momentum");
     expect(selectDemoTemplate("Accounting").id).toBe("folio");
-    expect(new Set(DEMO_TEMPLATES.map(template => renderDemoWebsite({ ...business, templateId: template.id }).contentHash)).size).toBe(3);
+    expect(new Set(DEMO_TEMPLATES.map(template => renderDemoWebsite({ ...business, templateId: template.id }).contentHash)).size).toBe(4);
     expect(getDemoTemplate("fieldwork").inspiration.name).toBe("ScrewFast");
   });
 
@@ -179,5 +179,97 @@ describe("free-template concept renderer", () => {
     const first = renderDemoWebsite({ ...business, businessProfile: original });
     expect(renderDemoWebsite({ ...business, businessProfile: { ...original, address: "11 Sample Road, Berwick VIC 3806" } }).contentHash).not.toBe(first.contentHash);
     expect(renderDemoWebsite({ ...business, businessProfile: { ...original, images: [] } }).contentHash).not.toBe(first.contentHash);
+  });
+
+  it("keeps Apple visual inspiration separate from upstream code licences and honours reduced motion", () => {
+    const result = renderDemoWebsite({ ...business, templateId: "clarity" });
+    expect(result.template.visualReference).toEqual({ name: "Apple", sourceUrl: "https://www.apple.com/", copiedCode: false, copiedAssets: false });
+    expect(Object.isFrozen(result.template.visualReference)).toBe(true);
+    expect(result.template.inspiration.licence).toBe("MIT");
+    expect(result.template.inspiration.name).toBe("Landwind");
+    expect(result.html).toContain("No Apple code, assets or affiliation.");
+    expect(result.html).toContain("font-family:-apple-system,BlinkMacSystemFont");
+    expect(result.html).toContain("@media(prefers-reduced-motion:reduce)");
+    expect(result.html).toContain(".clarity-arrive{animation:none}");
+    expect(result.html).toContain("Original abstract illustration");
+  });
+
+  it("renders the owner-selected studio identity and website without changing business facts", () => {
+    const result = renderDemoWebsite({ ...business, templateId: "clarity", studio: { name: "Wulff Digital", website: "https://wulffdigital.com/?token=remove" }, businessProfile: profile() });
+    expect(result.html).toContain("Independent website concept by Wulff Digital");
+    expect(result.html).toContain('href="https://wulffdigital.com/"');
+    expect(result.html).toContain(">wulffdigital.com</a>");
+    expect(result.html).not.toContain("token=remove");
+    expect(result.html).not.toContain("Wulff Studio");
+    expect(result.html).toContain(business.businessName);
+    expect(result.html).toContain("10 Sample Road, Berwick VIC 3806");
+    expect(result.html).toContain("Business information source ↗");
+    expect(() => renderDemoWebsite({ ...business, templateId: "clarity", studio: { name: "Wulff", website: "javascript:send()" } })).toThrow(/public HTTPS/);
+  });
+
+  it("escapes hostile Clarity branding and business fields and binds the exact result to its hash", () => {
+    const attack = '</h1><script>send()</script><img src=x onerror="steal()">';
+    const result = renderDemoWebsite({ ...business, templateId: "clarity", businessName: attack, studio: { name: attack, website: "https://wulffdigital.com/" }, businessProfile: { ...profile(), description: attack, address: attack } });
+    expect(result.html).not.toContain("<script>");
+    expect(result.html).not.toContain(attack);
+    expect(result.html).toContain("&lt;script&gt;send()&lt;/script&gt;");
+    expect(result.html).not.toMatch(/<img[^>]*\s+onerror=["']/);
+    const normal = renderDemoWebsite({ ...business, templateId: "clarity", studio: { name: "Wulff Digital", website: "https://wulffdigital.com/" } });
+    expect(normal.contentHash).not.toBe(result.contentHash);
+  });
+});
+
+describe("editable Clarity React source", () => {
+  const input: DemoBusinessInput = { ...business, templateId: "clarity", studio: { name: "Wulff Digital", website: "https://wulffdigital.com/" } };
+
+  it("exports a deterministic runnable React/Vite project with real components and no paid service calls", () => {
+    const result = exportDemoReactProject({ ...input, businessProfile: profile() });
+    expect(result).toEqual(exportDemoReactProject({ ...input, businessProfile: profile() }));
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.keys(result).sort()).toEqual(["README.md", "index.html", "package.json", "src/App.tsx", "src/index.css", "src/main.tsx", "tsconfig.json", "vite.config.ts"]);
+    expect(JSON.parse(result["package.json"]!)).toMatchObject({ private: true, dependencies: { react: "18.3.1", "react-dom": "18.3.1" }, scripts: { dev: "vite --host 127.0.0.1", build: "tsc --noEmit && vite build" } });
+    expect(result["src/App.tsx"]).toContain("function Hero()");
+    expect(result["src/App.tsx"]).toContain("function Services()");
+    expect(result["src/App.tsx"]).toContain("export default function App()");
+    expect(result["src/App.tsx"]).not.toMatch(/dangerouslySetInnerHTML|<iframe|srcDoc|fetch\(|XMLHttpRequest|ELEVENLABS|LOVABLE_API/);
+    expect(result["src/App.tsx"]).toContain("data:image/png;base64,");
+    expect(result["src/App.tsx"]).toContain("10 Sample Road, Berwick VIC 3806");
+    expect(result["README.md"]).toContain("not an iframe wrapper, Lovable-generated output");
+    expect(result["README.md"]).toContain("FICTIONAL TEST RECORD");
+    expect(result["README.md"]).toContain("Publishing, sending email or connecting a domain is a separate owner decision");
+  });
+
+  it("keeps hostile input in JSON data and escaped title rather than executable JSX or HTML", () => {
+    const attack = '</script><script>sendSecrets()</script>${send()}";import("evil")';
+    const result = exportDemoReactProject({ ...input, businessName: attack, studio: { name: attack, website: "https://wulffdigital.com/" }, description: attack });
+    expect(result["index.html"]).not.toContain(attack);
+    expect(result["index.html"]).toContain("&lt;/script&gt;&lt;script&gt;sendSecrets()");
+    expect(result["src/App.tsx"]).toContain("\\u003c/script>\\u003cscript>sendSecrets()");
+    expect(result["src/App.tsx"]).not.toContain("</script><script>");
+    expect(result["src/App.tsx"]).not.toContain('";import("evil")');
+    expect(result["src/App.tsx"]).toContain("<h1>{data.businessName}");
+    expect(result["src/App.tsx"]).toContain("<strong>Independent website concept by {data.studioName}");
+    expect(result["README.md"]).not.toContain(attack);
+  });
+
+  it("omits active or invalid image payloads and rejects mismatched legacy template exports", () => {
+    const unsafe = { ...image(), dataUrl: "data:image/svg+xml;base64,PHN2Zy8+", mime: "image/svg+xml" } as unknown as BusinessImage;
+    const result = exportDemoReactProject({ ...input, businessProfile: { ...profile(), logo: unsafe, images: [unsafe] } });
+    expect(result["src/App.tsx"]).not.toContain("data:image/svg+xml");
+    expect(result["src/App.tsx"]).toContain('"images": []');
+    expect(result["src/App.tsx"]).toContain('"logo": null');
+    expect(() => exportDemoReactProject({ ...input, templateId: "fieldwork" })).toThrow(/Build a Clarity concept/);
+    expect(() => exportDemoReactProject({ ...input, templateId: "momentum" })).toThrow(/Build a Clarity concept/);
+    expect(() => exportDemoReactProject({ ...input, templateId: "folio" })).toThrow(/Build a Clarity concept/);
+  });
+
+  it("exports the same Clarity style sheet as the protected preview and a separate valid React entry point", () => {
+    const result = exportDemoReactProject(input);
+    const rendered = renderDemoWebsite(input);
+    expect(result["src/index.css"]).toBe(rendered.html.match(/<style>([\s\S]*?)<\/style>/)?.[1]);
+    expect(result["index.html"]).toContain('class="theme-clarity"');
+    expect(result["index.html"]).toContain('<script type="module" src="/src/main.tsx"></script>');
+    expect(result["src/main.tsx"]).toContain('ReactDOM.createRoot(document.getElementById("root")!)');
+    expect(result["src/index.css"]).not.toMatch(/@import|url\(\s*["']?https?:/);
   });
 });

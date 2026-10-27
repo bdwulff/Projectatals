@@ -23,6 +23,44 @@ describe("official business asset enrichment", () => {
     const p = extractBusinessPage(html.replaceAll(input.businessName,"Another Company"),url,input.businessName);
     expect(p.address).toBeUndefined(); expect(p.services).toEqual([]);
   });
+  it("prefers a visible mailto contact over plain text and records its public source", () => {
+    const page='<p>Old enquiries: office@fixture.example.com</p><a href="mailto:Enquiries%40fixture.example.com">Contact our team</a>';
+    const p=extractBusinessPage(page,url,input.businessName);
+    expect(p.contactEmail).toBe("enquiries@fixture.example.com"); expect(p.contactSourceUrl).toBe(url);
+    expect(extractBusinessPage('<p>Call or email hello&#64;fixture.example.com.</p>',url,input.businessName).contactEmail).toBe("hello@fixture.example.com");
+  });
+  it("omits email in scripts, comments, metadata, templates, hidden elements and attributes", () => {
+    const page='<head><meta name="contact" content="head@fixture.example.com"></head>'
+      +'<!-- <a href="mailto:comment@fixture.example.com">Email</a> -->'
+      +'<script type="application/ld+json">{"email":"script@fixture.example.com"}</script>'
+      +'<style>.x { content:"style@fixture.example.com" }</style>'
+      +'<template><template><a href="mailto:template@fixture.example.com">Email</a></template>nested@fixture.example.com</template>'
+      +'<div hidden><a href="mailto:hidden@fixture.example.com">Email</a></div>'
+      +'<a aria-hidden=" true " href="mailto:aria@fixture.example.com">Email</a>'
+      +'<div style="display:none"><span>display@fixture.example.com</span></div>'
+      +'<p class="screen-reader-only">screen@fixture.example.com</p>'
+      +'<img alt="> attribute@fixture.example.com" src="/photo.png">';
+    expect(extractBusinessPage(page,url,input.businessName).contactEmail).toBeUndefined();
+  });
+  it("rejects mailto header injection, query strings, multiple recipients and malformed escapes", () => {
+    for (const value of ['office@fixture.example.com%0d%0aBcc:outside@evil.com','office@fixture.example.com?subject=Hello','office@fixture.example.com,other@fixture.example.com','office@fixture.example.com;other@fixture.example.com','office%ZZ@fixture.example.com']) {
+      const p=extractBusinessPage(`<a href="mailto:${value}">Contact us</a>`,url,input.businessName);
+      expect(p.contactEmail,value).toBeUndefined();
+    }
+  });
+  it("keeps unrelated agency contacts and placeholder/no-reply addresses out of a draft candidate", () => {
+    for (const email of ['design@agency.example.net','info@gmail.com','example@fixture.example.com','noreply@fixture.example.com','hello@example.com','test@example.com']) {
+      expect(extractBusinessPage(`<a href="mailto:${email}">Contact</a>`,url,input.businessName).contactEmail,email).toBeUndefined();
+    }
+    expect(extractBusinessPage('<a href="mailto:fixturefitness@gmail.com">Email Fixture Fitness</a>',url,'Fixture Fitness (fictional)').contactEmail).toBe('fixturefitness@gmail.com');
+  });
+  it("copies only a public contact candidate into a profile without any extra requests or consent claim", async () => {
+    const request=vi.fn(async()=>response('<p>Contact our business</p><a href="mailto:hello@fixture.example.com">Email</a>'));
+    const profile=await new OfficialBusinessEnricher({resolve,request}).enrich(input);
+    expect(profile.contactEmail).toBe('hello@fixture.example.com'); expect(profile.contactSourceUrl).toBe(url);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(profile).not.toHaveProperty('basis'); expect(profile).not.toHaveProperty('consent');
+  });
   it("does not mistake Google/review/payment artwork for a business logo or photograph", () => {
     const page='<img width="1185" height="511" src="/cropped-SHINE-scaled-2.png" alt="cropped-SHINE-scaled-2"><img src="/google-logo-removebg.png" class="logo"><img src="https://cdn.trustindex.io/assets/platform/Google/logo.svg" alt="Google"><img src="/visa-logo.png"><img src="/review.jpg" alt="Customer profile picture">';
     const p=extractBusinessPage(page,url,"ShineCraft Detailing Hub");

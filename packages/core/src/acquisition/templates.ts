@@ -1,5 +1,5 @@
 /** Curated, free commercial-use design references. No upstream template code or assets are embedded. */
-export type DemoTemplateId = "fieldwork" | "momentum" | "folio";
+export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity";
 
 export interface DemoTemplate {
   readonly id: DemoTemplateId;
@@ -17,6 +17,13 @@ export interface DemoTemplate {
     readonly copiedAssets: false;
   };
   readonly attribution: string;
+  /** A visual reference is not a licence to reuse that company's code or imagery. */
+  readonly visualReference?: {
+    readonly name: string;
+    readonly sourceUrl: string;
+    readonly copiedCode: false;
+    readonly copiedAssets: false;
+  };
 }
 
 const source = (name: string, sourceUrl: string, licenceUrl: string) => Object.freeze({
@@ -24,6 +31,13 @@ const source = (name: string, sourceUrl: string, licenceUrl: string) => Object.f
 });
 
 export const DEMO_TEMPLATES: readonly DemoTemplate[] = Object.freeze([
+  Object.freeze({
+    id: "clarity", name: "Clarity", category: "professional", implementation: "original_wulff_studio",
+    description: "Apple-inspired visual restraint: generous white space, quiet system typography, large business photography and focused service cards. Original code; no Apple code or assets reused.",
+    inspiration: source("Landwind", "https://github.com/themesberg/landwind", "https://github.com/themesberg/landwind/blob/main/LICENSE"),
+    visualReference: Object.freeze({ name: "Apple", sourceUrl: "https://www.apple.com/", copiedCode: false as const, copiedAssets: false as const }),
+    attribution: "Original design and implementation by Wulff Digital. Apple is a visual reference only; no Apple code, assets or affiliation. Free-template inspiration: Landwind (MIT); no upstream code or assets embedded.",
+  }),
   Object.freeze({
     id: "fieldwork", name: "Fieldwork", category: "trades", implementation: "original_wulff_studio",
     description: "Warm paper, olive ink, architectural linework and a confident editorial service index.",

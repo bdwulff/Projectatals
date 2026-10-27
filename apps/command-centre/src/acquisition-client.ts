@@ -1,6 +1,6 @@
 import { ApiError, SESSION_EXPIRED_EVENT } from "./api";
 
-export type DemoTemplateId = "fieldwork" | "momentum" | "folio";
+export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity";
 export interface AcquisitionTemplate {
   id: DemoTemplateId;
   name: string;
@@ -8,6 +8,7 @@ export interface AcquisitionTemplate {
   description: string;
   implementation: "original_wulff_studio";
   inspiration: { name: string; sourceUrl: string; licence: "MIT"; licenceUrl: string; verifiedAt: string; copiedCode: false; copiedAssets: false };
+  visualReference?: { name: string; sourceUrl: string; copiedCode: false; copiedAssets: false };
   attribution: string;
 }
 export interface AcquisitionConnection { state: "connected" | "not_connected" | "error" | "fake"; provider: string; detail: string }

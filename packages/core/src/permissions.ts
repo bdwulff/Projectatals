@@ -17,6 +17,8 @@ export type ActionKind =
   | "read.records"
   | "read.mail.inbox"
   | "read.mail.message"
+  | "read.discovery.program"
+  | "read.discovery.source"
   | "read.website"
   | "read.boxsafe.orders"
   | "read.boxsafe.members"
@@ -31,6 +33,8 @@ export type ActionKind =
   | "prepare.fulfilment_summary"
   // Level 3 — Execute approved routine actions
   | "execute.owner_speech"
+  | "execute.discovery.configure"
+  | "execute.discovery.run"
   | "execute.device.open_browser"
   | "execute.device.open_app"
   | "execute.internal_notification"
@@ -58,6 +62,8 @@ const LEVELS: Record<ActionKind, PermissionLevel> = {
   "read.records": PermissionLevel.Read,
   "read.mail.inbox": PermissionLevel.Read,
   "read.mail.message": PermissionLevel.Read,
+  "read.discovery.program": PermissionLevel.Read,
+  "read.discovery.source": PermissionLevel.Read,
   "read.website": PermissionLevel.Read,
   "read.boxsafe.orders": PermissionLevel.Read,
   "read.boxsafe.members": PermissionLevel.Read,
@@ -70,6 +76,8 @@ const LEVELS: Record<ActionKind, PermissionLevel> = {
   "prepare.code_change": PermissionLevel.Prepare,
   "prepare.fulfilment_summary": PermissionLevel.Prepare,
   "execute.owner_speech": PermissionLevel.ExecuteRoutine,
+  "execute.discovery.configure": PermissionLevel.ExecuteRoutine,
+  "execute.discovery.run": PermissionLevel.ExecuteRoutine,
   "execute.device.open_browser": PermissionLevel.ExecuteRoutine,
   "execute.device.open_app": PermissionLevel.ExecuteRoutine,
   "execute.internal_notification": PermissionLevel.ExecuteRoutine,

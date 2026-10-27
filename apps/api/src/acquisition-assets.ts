@@ -97,7 +97,100 @@ function nameMatches(expected: string, actual: unknown): boolean {
   return a.length > 0 && a.filter(w => b.includes(w)).length / a.length >= 0.5;
 }
 interface ImageCandidate { url: string; alt: string }
-export interface ExtractedBusinessPage { description?: string; address?: string; phone?: string; services: string[]; logos: ImageCandidate[]; images: ImageCandidate[] }
+export interface ExtractedBusinessPage { description?: string; address?: string; phone?: string; contactEmail?: string; contactSourceUrl?: string; services: string[]; logos: ImageCandidate[]; images: ImageCandidate[] }
+
+/** A conservative public contact candidate, never a consent or ownership determination. */
+function publicContactEmail(value: string, sourceUrl: string, businessName: string): string | undefined {
+  if (value.length > 254 || /[\u0000-\u0020\u007f%?&#,;:<>"\\]/.test(value)) return undefined;
+  const email = value.toLowerCase();
+  const match = /^([a-z0-9][a-z0-9._+-]{0,63})@([a-z0-9.-]+\.[a-z]{2,63})$/.exec(email);
+  if (!match) return undefined;
+  const local = match[1]!, domain = match[2]!;
+  if (local.endsWith(".") || local.includes("..") || domain.split(".").some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) return undefined;
+  if (/^(?:example|yourname|your[-_.]?email|username|someone|sample|demo|test|noreply|no[-_.]?reply|donot[-_.]?reply|do[-_.]?not[-_.]?reply)(?:[+._-]|$)/.test(local)
+    || /^(?:example\.(?:com|org|net)|yourdomain\.com|domain\.com|email\.com)$/.test(domain)) return undefined;
+  try { safeBusinessAssetUrl(`https://${domain}`); } catch { return undefined; }
+  let host: string;
+  try { host = safeBusinessAssetUrl(sourceUrl).hostname.replace(/^www\./, ""); } catch { return undefined; }
+  const ownDomain = domain === host || domain.endsWith(`.${host}`) || host.endsWith(`.${domain}`);
+  // Personal mail services are common for small businesses, but unrelated footer/agency emails
+  // must not become a business contact merely because they occur on the same page.
+  const businessWords = businessName.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ")
+    .filter(word => word.length >= 4 && !["fictional", "example", "company", "business", "limited", "australia", "services"].includes(word));
+  const compactLocal = local.replace(/[^a-z0-9]/g, "");
+  const namedPublicMailbox = /^(?:gmail\.com|outlook\.com|hotmail\.com|live\.com(?:\.au)?|yahoo\.com(?:\.au)?|icloud\.com|bigpond\.com|bigpond\.net\.au|optusnet\.com\.au)$/.test(domain)
+    && businessWords.some(word => compactLocal.includes(word));
+  return ownDomain || namedPublicMailbox ? email : undefined;
+}
+
+/** Scan the bounded HTML once, omitting active, hidden and non-rendered contact content. */
+function extractPublicContact(html: string, sourceUrl: string, businessName: string): string | undefined {
+  const bounded = html.slice(0, HTML_LIMIT), lower = bounded.toLowerCase();
+  const visible: string[] = [];
+  const stack: Array<{ name: string; hidden: boolean }> = [];
+  const voidTags = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+  let cursor = 0, tagCount = 0, preferred: string | undefined;
+  while (cursor < bounded.length && tagCount < 100_000) {
+    const start = bounded.indexOf("<", cursor);
+    if (start < 0) { if (!stack.at(-1)?.hidden) visible.push(bounded.slice(cursor)); break; }
+    if (!stack.at(-1)?.hidden) visible.push(bounded.slice(cursor, start));
+    if (bounded.startsWith("<!--", start)) {
+      const end = bounded.indexOf("-->", start + 4);
+      if (end < 0) break;
+      cursor = end + 3; continue;
+    }
+    let end = start + 1, quote = "";
+    for (; end < bounded.length; end++) {
+      const character = bounded[end]!;
+      if (quote) { if (character === quote) quote = ""; }
+      else if (character === '"' || character === "'") quote = character;
+      else if (character === ">") break;
+    }
+    if (end >= bounded.length) break;
+    cursor = end + 1; tagCount++;
+    const tag = bounded.slice(start, end + 1);
+    const parsed = /^<\s*(\/?)\s*([a-z][a-z0-9:-]*)\b/i.exec(tag);
+    if (!parsed) continue;
+    if (tag.length > 6000) break;
+    const name = parsed[2]!.toLowerCase();
+    if (parsed[1]) {
+      let index = stack.length - 1;
+      while (index >= 0 && stack[index]!.name !== name) index--;
+      if (index >= 0) stack.length = index;
+      if (!stack.at(-1)?.hidden) visible.push(" ");
+      continue;
+    }
+    if (["script", "style", "head", "noscript", "textarea", "title"].includes(name)) {
+      const closing = lower.indexOf(`</${name}`, cursor);
+      if (closing < 0) break;
+      const closeEnd = lower.indexOf(">", closing);
+      if (closeEnd < 0) break;
+      cursor = closeEnd + 1; visible.push(" "); continue;
+    }
+    const a = attributes(tag);
+    const hidden = name === "template" || Boolean(stack.at(-1)?.hidden) || /\s(?:hidden|inert)(?:\s|=|\/?>)/i.test(tag)
+      || a["aria-hidden"]?.trim().toLowerCase() === "true"
+      || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|content-visibility\s*:\s*hidden|opacity\s*:\s*0(?:\D|$))/i.test(a.style ?? "")
+      || /(?:^|\s)(?:hidden|sr-only|screen-reader-only|visually-hidden|d-none)(?:\s|$)/i.test(a.class ?? "");
+    if (!hidden && name === "a" && !preferred && a.href && /^mailto:/i.test(a.href)) {
+      const raw = a.href.slice(7);
+      try { preferred = publicContactEmail(decodeURIComponent(raw), sourceUrl, businessName); } catch { /* Malformed escaping is not a contact. */ }
+    }
+    if (!hidden) visible.push(" ");
+    if (!voidTags.has(name) && !/\/\s*>$/.test(tag)) {
+      // Excessive nesting is treated as hidden rather than weakening the visibility check.
+      if (stack.length >= 80) break;
+      stack.push({ name, hidden });
+    }
+  }
+  if (preferred) return preferred;
+  const plain = entities(visible.join(" "));
+  for (const match of plain.matchAll(/[a-z0-9][a-z0-9._+-]{0,63}@[a-z0-9.-]+\.[a-z]{2,63}/gi)) {
+    const email = publicContactEmail(match[0], sourceUrl, businessName);
+    if (email) return email;
+  }
+  return undefined;
+}
 
 function withoutActiveBlocks(html: string): string {
   const lower = html.toLowerCase();
@@ -123,6 +216,8 @@ export function publicArtworkProhibited(html: string): boolean {
 /** Extract public data, never execute instructions or scripts from the fetched page. */
 export function extractBusinessPage(html: string, sourceUrl: string, businessName: string): ExtractedBusinessPage {
   const result: ExtractedBusinessPage = { services: [], logos: [], images: [] };
+  const contactEmail = extractPublicContact(html, sourceUrl, businessName);
+  if (contactEmail) { result.contactEmail = contactEmail; result.contactSourceUrl = sourceUrl; }
   const unrelatedArtwork = /google|trustindex|trustpilot|facebook|instagram|linkedin|twitter|youtube|tiktok|paypal|mastercard|visa[-_ ]?logo|payment[-_ ]?(?:logo|badge)|agency[-_ ]?logo|web[-_ ]?design[-_ ]?logo|profile[-_ ]?picture|gravatar|avatar/i;
   const add = (list: ImageCandidate[], candidate: unknown, alt: string) => { const url = urlValue(candidate, sourceUrl); if (url && !unrelatedArtwork.test(url + " " + alt) && !list.some(i => i.url === url)) list.push({ url, alt }); };
   const json: Record<string, unknown>[] = [];
@@ -258,7 +353,7 @@ export class OfficialBusinessEnricher implements BusinessProfileEnricher {
       profile.sourceUrl = page.url;
       const html = Buffer.from(page.response.body).toString("utf8");
       const extracted = extractBusinessPage(html, page.url, input.businessName);
-      Object.assign(profile, { description: extracted.description, address: extracted.address, phone: extracted.phone, services: extracted.services });
+      Object.assign(profile, { description: extracted.description, address: extracted.address, phone: extracted.phone, contactEmail: extracted.contactEmail, contactSourceUrl: extracted.contactSourceUrl, services: extracted.services });
       if (publicArtworkProhibited(html)) {
         profile.state = "partial";
         profile.detail = "Published business details were found, but the website expressly restricts copying or reproducing its content. Its logo and photographs were not downloaded.";

@@ -202,3 +202,5 @@
 .acq-profile-sources a { display: inline-flex; align-items: center; gap: 4px; }
 .acq-profile-notices li { display: list-item; margin-left: 12px; list-style: disc; }
 @media(max-width:680px) { .acq-business-profile { padding: 14px; } .acq-profile-heading { align-items: flex-start; flex-direction: column; } .acq-profile-heading .acq-btn { width: 100%; } }
+
+.acq-draft-export{margin:15px 0 0;padding:14px 0 0;border-top:1px solid rgba(152,210,221,.1)}.acq-draft-export .acq-form-note{margin-top:9px}

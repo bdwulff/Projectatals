@@ -39,6 +39,7 @@ export function createBackgroundWorker(rt: Runtime, env: NodeJS.ProcessEnv = pro
   const store = rt.atlas.deps.store;
 
   function researchGate(): BackgroundTaskState | null {
+    if (rt.discoveryProgram?.isConfigured()) return { state: "skipped", detail: "The configured Discovery program replaces legacy automatic research. No duplicate search was made." };
     if (env.ATLAS_RESEARCH_ENABLED !== "true") return { state: "skipped", detail: "Automatic research is disabled." };
     if (env.ATLAS_MODE !== "live" || rt.mode !== "live") return { state: "skipped", detail: "Automatic research runs only in explicit live mode; fictional mode never searches automatically." };
     if (env.ATLAS_RESEARCH_PROVIDER !== "tavily" && !env.BRAVE_SEARCH_API_KEY?.trim()) return { state: "blocked", detail: "Choose free Tavily research or configure BRAVE_SEARCH_API_KEY. No fictional data is substituted." };
@@ -105,24 +106,29 @@ export function createBackgroundWorker(rt: Runtime, env: NodeJS.ProcessEnv = pro
       }
       store.setMemory("background.lastRun", run);
 
-      const gate = researchGate();
-      if (gate) {
-        run.research = gate;
-        store.setMemory("background.research.eligibility", { ...gate, checkedAt: clock().toISOString() });
+      if (rt.discoveryProgram?.isConfigured()) {
+        const result = await rt.discoveryProgram.dailyTick();
+        run.research = { ...result, state: result.state === "idle" ? "skipped" : result.state };
       } else {
-        const requestedScope = scope();
-        const key = `${RESEARCH_JOB}:${day}:${requestedScope.scopeHash}`;
-        // A succeeded, dead, or interrupted/running job retains this unique key. Never re-enqueue a retry today.
-        const queued = rt.atlas.jobs.enqueue(RESEARCH_JOB, { ...requestedScope, day }, { idempotencyKey: key, maxAttempts: 1, runAfter: now });
-        if (queued.created || queued.job.status === "queued") await rt.atlas.jobs.runOnce(20, now);
-        const job = store.getJobByKey(key)!;
-        if (job.status === "succeeded") {
-          const result = job.result as { candidateCount?: number; qualifiedCount?: number } | null;
-          run.research = { state: queued.created ? "completed" : "already_ran", detail: queued.created ? "Daily research completed; results are ready for owner review." : "This Melbourne day's research scope has already completed; no additional search was made.", jobId: job.id, candidateCount: result?.candidateCount, qualifiedCount: result?.qualifiedCount };
-        } else if (job.status === "dead" || job.status === "failed") {
-          run.research = { state: "failed", detail: "Daily research failed and will not retry automatically for this day and scope.", jobId: job.id };
+        const gate = researchGate();
+        if (gate) {
+          run.research = gate;
+          store.setMemory("background.research.eligibility", { ...gate, checkedAt: clock().toISOString() });
         } else {
-          run.research = { state: job.status === "running" ? "running" : "queued", detail: job.status === "running" ? "Research was started; an interrupted request is not repeated automatically." : "Daily research is queued in the persistent job queue.", jobId: job.id };
+          const requestedScope = scope();
+          const key = `${RESEARCH_JOB}:${day}:${requestedScope.scopeHash}`;
+          // A succeeded, dead, or interrupted/running job retains this unique key. Never re-enqueue a retry today.
+          const queued = rt.atlas.jobs.enqueue(RESEARCH_JOB, { ...requestedScope, day }, { idempotencyKey: key, maxAttempts: 1, runAfter: now });
+          if (queued.created || queued.job.status === "queued") await rt.atlas.jobs.runOnce(20, now);
+          const job = store.getJobByKey(key)!;
+          if (job.status === "succeeded") {
+            const result = job.result as { candidateCount?: number; qualifiedCount?: number } | null;
+            run.research = { state: queued.created ? "completed" : "already_ran", detail: queued.created ? "Daily research completed; results are ready for owner review." : "This Melbourne day's research scope has already completed; no additional search was made.", jobId: job.id, candidateCount: result?.candidateCount, qualifiedCount: result?.qualifiedCount };
+          } else if (job.status === "dead" || job.status === "failed") {
+            run.research = { state: "failed", detail: "Daily research failed and will not retry automatically for this day and scope.", jobId: job.id };
+          } else {
+            run.research = { state: job.status === "running" ? "running" : "queued", detail: job.status === "running" ? "Research was started; an interrupted request is not repeated automatically." : "Daily research is queued in the persistent job queue.", jobId: job.id };
+          }
         }
       }
       try { await rt.ownerUpdates.dailyTick(); } catch { store.setMemory("ownerUpdates.workerError", { at: clock().toISOString(), detail: "Owner update processing could not finish. Check its connection status." }); }

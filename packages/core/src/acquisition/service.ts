@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Atlas } from "../orchestrator.js";
 import type { Prospect } from "../wulff/prospects.js";
 import { contentHash, newId } from "../ids.js";
-import { renderDemoWebsite, safeDemoWebsite } from "./demo-renderer.js";
+import { exportDemoReactProject, renderDemoWebsite, safeDemoWebsite } from "./demo-renderer.js";
 import { DEMO_TEMPLATES, getDemoTemplate, type DemoTemplateId } from "./templates.js";
 import { businessProfileSummary, type BusinessProfile, type BusinessProfileEnricher, type BusinessProfileSummary } from "./business-profile.js";
 
@@ -54,7 +54,7 @@ export interface AcquisitionSnapshot {
   sender: AcquisitionSenderInput & { ready: boolean; detail: string };
   records: AcquisitionRecord[];
 }
-interface InternalDemo { id: string; leadId: string; html: string; csp: string; htmlHash: string; publicTokenHash: string; publicPath: string; expiresAt: string; publishedAt?: string; revokedAt?: string }
+interface InternalDemo { id: string; leadId: string; html: string; csp: string; htmlHash: string; publicTokenHash: string; publicPath: string; expiresAt: string; publishedAt?: string; revokedAt?: string; sourceFiles?: Readonly<Record<string, string>> }
 interface UnsubscribeRecord { tokenHash: string; emailHash: string; leadId: string }
 interface PrivateLead { unsubscribeToken: string; unsubscribeEmail: string }
 interface SendPayload { leadId: string; expectedHash: string; day: string }
@@ -119,13 +119,14 @@ export class AcquisitionService {
     return { mode: this.options.mode, templates: DEMO_TEMPLATES, discovery, email, sender, records };
   }
 
-  async discover(input: { area: string; industry?: string; count: number }): Promise<AcquisitionRecord[]> {
+  async discover(input: { area: string; industry?: string; count: number; templateId?: string }): Promise<AcquisitionRecord[]> {
     const area = required(input.area, "Area", 160);
     if (!Number.isInteger(input.count) || input.count < 1 || input.count > 5) throw new AcquisitionError("Discover one to five companies at a time.", 400);
+    if (input.templateId !== undefined) getDemoTemplate(input.templateId as DemoTemplateId);
     const prospects = await this.atlas.researchProspects({ area, count: input.count, ...(input.industry ? { industries: [required(input.industry, "Industry", 100)] } : {}) });
     const records = prospects.slice(0, input.count).map(prospect => this.importProspect(prospect)).filter(record => !record.archivedAt);
     const prepared: AcquisitionRecord[] = [];
-    for (const record of records) prepared.push(record.demo && record.draft ? record : await this.enrichAndPrepare(record.id));
+    for (const record of records) prepared.push(record.demo && record.draft && (!input.templateId || record.demo.templateId === input.templateId) ? record : await this.enrichAndPrepare(record.id, { templateId: input.templateId }));
     return prepared;
   }
 
@@ -152,9 +153,10 @@ export class AcquisitionService {
     let website: string | null = null;
     try { website = safeDemoWebsite(record.website); } catch { /* Preserve legacy/fixture sources as evidence, never as unsafe public links. */ }
     const businessProfile = this.store.getDoc<BusinessProfile>(PROFILES, leadId)?.doc;
-    const rendered = renderDemoWebsite({ businessName: record.businessName, location: record.location, industry: record.industry, services: record.services, website, contactEmail: record.contact?.email, templateId: options.templateId as DemoTemplateId | undefined, fixture: Boolean(prospect.fixture), businessProfile });
+    const input = { businessName: record.businessName, location: record.location, industry: record.industry, services: record.services, website, contactEmail: record.contact?.email, templateId: options.templateId as DemoTemplateId | undefined, fixture: Boolean(prospect.fixture), businessProfile, studio: this.company() };
+    const rendered = renderDemoWebsite(input);
     const id = newId("demo"), rawToken = token(), expiresAt = new Date(this.clock().getTime() + 14 * 86_400_000).toISOString();
-    const internal: InternalDemo = { id, leadId, html: rendered.html, csp: rendered.contentSecurityPolicy, htmlHash: sha(rendered.html), publicTokenHash: sha(rawToken), publicPath: `/demos/${rawToken}`, expiresAt };
+    const internal: InternalDemo = { id, leadId, html: rendered.html, csp: rendered.contentSecurityPolicy, htmlHash: sha(rendered.html), publicTokenHash: sha(rawToken), publicPath: `/demos/${rawToken}`, expiresAt, ...(rendered.templateId === "clarity" ? { sourceFiles: exportDemoReactProject({ ...input, templateId: "clarity" }) } : {}) };
     this.store.upsertDoc(DEMOS, id, internal);
     this.store.upsertDoc(TOKENS, internal.publicTokenHash, { demoId: id });
     record.demo = { id, templateId: rendered.templateId, templateName: rendered.templateName, htmlHash: internal.htmlHash, previewPath: `/api/acquisition/demos/${id}/preview`, publicPath: null, expiresAt };
@@ -183,6 +185,11 @@ export class AcquisitionService {
       if (contentHash(current) !== revision) throw new AcquisitionError("This lead changed while its website was being checked. Review the current record and refresh again.");
       this.store.upsertDoc(PROFILES, leadId, profile);
       current.businessProfile = businessProfileSummary(profile);
+      if (!current.contact && profile.contactEmail && profile.contactSourceUrl) {
+        try {
+          current.contact = { email: emailValue(profile.contactEmail, this.options.mode), sourceUrl: sourceUrlValue(profile.contactSourceUrl, this.options.mode), basis: "none_established", evidence: "Public contact address found on the business website. Consent and relevance have not been reviewed.", roleRelevant: false, noMarketingProhibition: false };
+        } catch { /* A source candidate is not a verified recipient or permission to contact. */ }
+      }
       this.save(current);
       this.atlas.audit.record({ actor: "agent:research", action: "acquisition.business_profile.checked", business: "wulff_studio", targetType: "acquisition", targetId: leadId, outcome: profile.state === "unavailable" ? "failed" : profile.state === "fictional" ? "simulated" : "completed", detail: { state: profile.state, sourceUrl: profile.sourceUrl, logoHash: profile.logo?.sha256, imageHashes: profile.images.map(image => image.sha256), addressFound: Boolean(profile.address), phoneFound: Boolean(profile.phone) } });
     }
@@ -206,6 +213,37 @@ export class AcquisitionService {
     for (const record of this.records()) if (record.demo && record.draft && !TERMINAL.has(record.draft.status) && record.draft.status !== "submitting") this.compose(record);
     this.atlas.audit.record({ actor: "owner", action: "acquisition.sender.saved", business: "wulff_studio", outcome: "completed", detail: { email: sender.email } });
     return sender;
+  }
+
+  /** Owner-supplied business identity. It never changes the email account or domain DNS. */
+  configureCompany(input: { name: string; website: string }): { name: string; website: string } {
+    const name = required(input.name, "Company name", 160);
+    let website: string | null;
+    try { website = safeDemoWebsite(input.website); } catch { throw new AcquisitionError("Use a public HTTPS company website without credentials.", 400); }
+    if (!website) throw new AcquisitionError("Provide the company website.", 400);
+    if (this.records().some(record => record.draft?.status === "submitting")) throw new AcquisitionError("An email submission is active. Update the company identity after it finishes.");
+    const company = { name, website };
+    if (contentHash(this.company()) === contentHash(company)) return company;
+    const previous = this.sender();
+    this.store.setMemory("acquisition.company", company);
+    const next = this.sender();
+    for (const record of this.records()) {
+      if (!record.draft || TERMINAL.has(record.draft.status) || record.draft.status === "cancelled") continue;
+      if (previous.organisation) record.draft.text = record.draft.text.split(previous.organisation).join(next.organisation);
+      if (previous.contactDetails) record.draft.text = record.draft.text.replace(previous.contactDetails, next.contactDetails);
+      else record.draft.text += `\n${company.website}`;
+      record.draft.version += 1;
+      record.draft.status = "draft";
+      delete record.draft.approvalId;
+      record.draft.contentHash = contentHash(this.payload(record));
+      this.save(record);
+    }
+    this.atlas.audit.record({ actor: "owner", action: "execute.record_update", business: "wulff_studio", outcome: "completed", detail: { operation: "company_identity_saved", name, website } });
+    return company;
+  }
+
+  company(): { name: string; website?: string } {
+    return this.store.getMemory<{ name: string; website: string }>("acquisition.company") ?? { name: this.options.organisation ?? "Wulff Studio" };
   }
 
   saveDraft(leadId: string, input: { subject: string; text: string; expectedHash: string }): AcquisitionRecord {
@@ -275,6 +313,13 @@ export class AcquisitionService {
   }
 
   ownerPreview(demoId: string): { html: string; csp: string } | null { const demo = this.store.getDoc<InternalDemo>(DEMOS, demoId)?.doc; const lead = demo ? this.store.getDoc<AcquisitionRecord>(RECORDS, demo.leadId)?.doc : null; return demo && lead && !lead.archivedAt ? { html: demo.html, csp: demo.csp } : null; }
+  sourceProject(leadId: string): { name: string; files: Readonly<Record<string, string>> } {
+    const record = this.require(leadId);
+    if (!record.demo || record.demo.templateId !== "clarity") throw new AcquisitionError("Build a Clarity concept first to download its matching React project.");
+    const demo = this.internal(record);
+    if (!demo.sourceFiles || sha(demo.html) !== record.demo.htmlHash) throw new AcquisitionError("Rebuild this Clarity concept to create its matching source download.");
+    return { name: record.businessName, files: demo.sourceFiles };
+  }
   publicPreview(rawToken: string): { html: string; csp: string } | null {
     if (!validToken(rawToken)) return null;
     const pointer = this.store.getDoc<{ demoId: string }>(TOKENS, sha(rawToken))?.doc;
@@ -390,7 +435,9 @@ export class AcquisitionService {
     return [...new Set(blockers)];
   }
   private sender(): AcquisitionSenderInput {
-    return this.store.getMemory<AcquisitionSenderInput>("acquisition.sender") ?? { name: this.options.senderName ?? this.atlas.deps.config.ownerName, organisation: this.options.organisation ?? "Wulff Studio", email: this.options.fromAddress ?? this.atlas.deps.config.businessFromAddress, contactDetails: this.options.contactDetails ?? "" };
+    const sender = this.store.getMemory<AcquisitionSenderInput>("acquisition.sender") ?? { name: this.options.senderName ?? this.atlas.deps.config.ownerName, organisation: this.options.organisation ?? "Wulff Studio", email: this.options.fromAddress ?? this.atlas.deps.config.businessFromAddress, contactDetails: this.options.contactDetails ?? "" };
+    const company = this.store.getMemory<{ name: string; website: string }>("acquisition.company");
+    return company ? { ...sender, organisation: company.name, contactDetails: sender.contactDetails.includes(company.website) ? sender.contactDetails : [sender.contactDetails, company.website].filter(Boolean).join("\n") } : sender;
   }
   private senderStatus(email: Awaited<ReturnType<AcquisitionService["mailStatus"]>>): AcquisitionSnapshot["sender"] {
     const sender = this.sender(); let valid = false;

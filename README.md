@@ -99,7 +99,7 @@ using `.mcp.json.example` and `docs/AUTOMATION-SETUP.md`.
 
 ## Client research and lookups
 
-Open **Studio** for company discovery, three creative website directions, private
+Open **Studio** for company discovery, four creative website directions, private
 concept previews and exact email review. `Jarvis, find three businesses near
 Berwick` now prepares source-backed candidates, private concepts and email drafts.
 Free, rate-limited Tavily keyless search is the default; a configured Brave key
@@ -117,6 +117,13 @@ source-backed contact eligibility and exact owner approval are required to publi
 and send each initial email. No automatic follow-ups run. See
 [CLIENT-ACQUISITION.md](docs/CLIENT-ACQUISITION.md) for setup, licence sources and limits.
 `docs/LIVE-RESEARCH.md` explains the provider and evidence limits.
+
+The **Discovery program** adds one daily private shortlist for Wulff Digital,
+Apple-inspired Clarity demos built from original code, matching React/Vite source
+downloads and unsent email drafts. Its spoken reports use installed device voices
+with no Lovable, ElevenLabs or model credits. Keyless search limits and existing
+hosting charges still apply. See [DISCOVERY-PROGRAM.md](docs/DISCOVERY-PROGRAM.md)
+for scheduling, owner review, source provenance and foreground speech requirements.
 
 ## Private Jarvis on Mac and iPhone
 
