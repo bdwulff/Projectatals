@@ -27,7 +27,7 @@ export interface AcquisitionContact {
 export interface AcquisitionDemo {
   id: string; templateId: DemoTemplateId; templateName: string; htmlHash: string; previewPath: string;
   publicPath: string | null; publishedAt?: string; expiresAt: string;
-  designBrief?: { id: string; family: "automotive" | "craft" | "movement" | "editorial"; direction: string; palette: { background: string; foreground: string; accent: string; muted: string }; layout: string; typography: string; headline: string; signature: string; sections: string[] };
+  designBrief?: { id: string; family: "automotive" | "craft" | "movement" | "editorial"; direction: string; palette: { background: string; foreground: string; accent: string; muted: string }; layout: string; typography: string; headline: string; signature: string; sections: string[]; placeholderPhotoCount?: number; businessPhotoCount?: number; logoKind?: "business" | "concept"; templateReferences?: Array<{ name: string; sourceUrl: string; previewUrl?: string }> };
 }
 export type OutreachStatus = "draft" | "blocked" | "awaiting_approval" | "queued" | "submitting" | "accepted" | "failed" | "uncertain" | "cancelled" | "simulated";
 export interface AcquisitionDraft {

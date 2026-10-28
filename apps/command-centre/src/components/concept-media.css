@@ -1,0 +1,15 @@
+.acq-concept-media{border:1px solid rgba(167,218,223,.18);background:linear-gradient(120deg,rgba(24,57,66,.68),rgba(9,25,35,.5));border-radius:12px;padding:18px;margin:0 0 18px}
+.acq-concept-media__heading{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.acq-concept-media__heading h3{margin:0;color:#e2f4f2;font-size:14px;line-height:1.5;font-weight:500;overflow-wrap:anywhere}
+.acq-concept-media__heading>span{display:inline-flex;align-items:center;gap:6px;font:10px ui-monospace,SFMono-Regular,monospace;color:#b5d7d9;letter-spacing:.04em}
+.acq-concept-media p{font-size:11px;color:#9bb8bd;line-height:1.7;margin:8px 0 0;max-width:80ch}
+.acq-concept-media details{margin-top:12px;border-top:1px solid rgba(157,208,214,.13);padding-top:10px}
+.acq-concept-media summary{display:flex;align-items:center;gap:7px;font-size:11px;color:#c3e5e7;cursor:pointer}
+.acq-concept-media ul{padding:0;margin:10px 0 0;list-style:none;display:flex;flex-wrap:wrap;gap:8px 16px}
+.acq-concept-media li{font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+.acq-concept-media a{color:#b9e9ec;text-decoration:underline;text-underline-offset:3px}
+.acq-concept-media a+a{margin-left:7px;color:#91b8c0}
+.sr-asset-note strong{color:#c3e6e2;font-weight:500}
+.sr-media-caption{font-size:10px;color:#87a8ae;line-height:1.6;margin:7px 0 0}
+.sr-template-reference{display:block;margin-top:8px;font-size:10px;color:#b9dadd;line-height:1.6}
+@media(max-width:430px){.acq-concept-media{padding:14px}.acq-concept-media__heading{align-items:flex-start;flex-direction:column;gap:7px}}

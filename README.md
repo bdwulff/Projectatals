@@ -132,6 +132,13 @@ website absence and missing facts stay explicit. See
 [IMMERSIVE-DEVELOPMENT.md](docs/IMMERSIVE-DEVELOPMENT.md) for design, batch safety
 and current release verification.
 
+The photographic showcase revision adds six sector layouts and a professional
+fallback, at least four embedded licensed placeholder photos per demo, labelled
+concept logos and matching editable React source. Six new private demos and the
+owner review-list notification are verified on the hosted release. See
+[PHOTO-SHOWCASE.md](docs/PHOTO-SHOWCASE.md) for the 15 free-template references,
+asset provenance, private rebuild policy and validation results.
+
 ## Private Jarvis on Mac and iPhone
 
 The owner dashboard can be used from anywhere after Railway account authorisation

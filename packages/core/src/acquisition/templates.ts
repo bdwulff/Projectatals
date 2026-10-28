@@ -33,9 +33,9 @@ const source = (name: string, sourceUrl: string, licenceUrl: string) => Object.f
 export const DEMO_TEMPLATES: readonly DemoTemplate[] = Object.freeze([
   Object.freeze({
     id: "immersive", name: "Immersive", category: "professional", implementation: "original_wulff_studio",
-    description: "A business-specific art direction with four distinct design families, identity-led composition, sculptural artwork, sourced photography and working native exploration controls.",
+    description: "Seven photograph-led sector compositions: cinematic automotive, lush gardens, editorial salons, athletic training, warm cafés, food-led restaurants and neutral professional services. Four licensed illustrative photographs, concept logos and working native exploration controls.",
     inspiration: source("Landwind", "https://github.com/themesberg/landwind", "https://github.com/themesberg/landwind/blob/main/LICENSE"),
-    attribution: "Original business-specific design, illustration and implementation by Wulff Digital. No upstream template code or assets embedded; business assets retain their recorded source provenance.",
+    attribution: "Original photograph-led design and implementation by Wulff Digital. Free template references inform composition; no upstream template code or assets are copied. Embedded illustrative photographs and recorded business assets retain separate source provenance.",
   }),
   Object.freeze({
     id: "clarity", name: "Clarity", category: "professional", implementation: "original_wulff_studio",

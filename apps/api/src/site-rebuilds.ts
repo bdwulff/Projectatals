@@ -2,7 +2,7 @@ import { contentHash, isCustomerStage, PermissionLevel, requiredLevel, type Acqu
 import type { Hono } from "hono";
 import type { Runtime } from "./runtime.js";
 
-const REPORTS = "site_rebuild_reports", JOB = "site_rebuilds", POLICY = "immersive-private-v1";
+const REPORTS = "site_rebuild_reports", JOB = "site_rebuilds", POLICY = "photo-showcase-v2";
 const MAX_RECORDS = 10_000, MAX_TARGETS = 500;
 const UNSAFE_DRAFTS = new Set(["accepted", "queued", "submitting", "uncertain", "simulated", "cancelled"]);
 const SOCIAL = ["facebook.com", "fb.com", "instagram.com", "linkedin.com", "tiktok.com", "youtube.com", "youtu.be", "x.com", "twitter.com", "linktr.ee"];
@@ -198,7 +198,11 @@ export class SiteRebuilds {
   private summary(report: StoredReport) {
     const prefix = report.fixture ? "Fictional test report. " : "";
     if (!report.targetCount) return `${prefix}No eligible existing prospects with an own-website research gap were found. I have not claimed that any business has no website. Nothing was emailed or published.`;
-    return `${prefix}I rebuilt ${report.rebuiltCount} private business-specific demo${report.rebuiltCount === 1 ? "" : "s"} for potential clients with no own website recorded or only social and directory links. ${report.skippedCount ? `${report.skippedCount} changed records were preserved. ` : ""}${report.errors.length ? `${report.errors.length} demo${report.errors.length === 1 ? " needs" : "s need"} attention. ` : ""}Your review list is ready in Studio. Confirm each business's online presence before outreach. Nothing was emailed to clients or published. No Lovable, model or paid voice credits were used.`;
+    const ready = report.businesses.filter(business => business.state === "ready");
+    const illustrative = ready.reduce((total, business) => total + (typeof business.design?.placeholderPhotoCount === "number" ? business.design.placeholderPhotoCount : 0), 0);
+    const concepts = ready.filter(business => business.design?.logoKind === "concept").length;
+    const photography = illustrative ? `The collection includes ${illustrative} illustrative photographs${concepts ? ` and ${concepts} concept logos` : ""}. ` : "";
+    return `${prefix}I rebuilt ${report.rebuiltCount} private business-specific demo${report.rebuiltCount === 1 ? "" : "s"} for potential clients with no own website recorded or only social and directory links. ${photography}${report.skippedCount ? `${report.skippedCount} changed records were preserved. ` : ""}${report.errors.length ? `${report.errors.length} demo${report.errors.length === 1 ? " needs" : "s need"} attention. ` : ""}Your review list is ready in Studio. Confirm each business's online presence before outreach. Nothing was emailed to clients or published. No Lovable, model or paid voice credits were used.`;
   }
   private publicReport({ fingerprints: _fingerprints, jobKey: _jobKey, generation: _generation, ordinal: _ordinal, ...report }: StoredReport): SiteRebuildReport { return report; }
   private reports() { return this.store.listDocs<StoredReport>(REPORTS, 20).map(row => row.doc).sort((a, b) => (b.ordinal ?? 0) - (a.ordinal ?? 0) || b.startedAt.localeCompare(a.startedAt)); }

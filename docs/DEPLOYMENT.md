@@ -1,6 +1,48 @@
 # Jarvis hosted deployment
 
-> **Immersive rebuild deployed:** Railway deployment
+> **Photographic showcase deployed:** Railway deployment
+> `c31f974a-5133-48e7-a7c2-ae5fe4865dc6` reached **SUCCESS** on 28 October 2026.
+> All 537 workspace tests, the production build, 330 renderer/export checks,
+> 51 local review-UI browser checks, 128 hosted UI checks and 227 hosted HTTP/data
+> checks passed. All six qualified
+> local prospects received new private demos under `photo-showcase-v2`, with
+> 24 embedded illustrative photographs and six labelled concept logos. See
+> [PHOTO-SHOWCASE.md](PHOTO-SHOWCASE.md).
+
+The renderer supports six photographic business sectors plus a neutral
+professional fallback. The bundled pack contains 28 licensed JPEGs, four per
+sector, with recorded photographer/source/licence metadata. Each demo uses at
+least four distinct embedded raster photographs; genuine business media remains
+separate from illustrative stock. Matching eight-file React/Vite exports retain
+editable components, CSS and provenance. All six generated source projects passed
+type checks and production builds; native menus, service panels, galleries and
+anchor links were exercised in the browser checks.
+
+Current workspace validation: 231 core, 260 API, seven MCP, 24 local-agent and
+15 UI tests. The 227/227 hosted checks verified the exact deployed JavaScript/CSS
+bytes, protected access, decoded image payloads, matching source imagery,
+owner-secret exclusion, six new demo versions and preserved owner-edited drafts.
+All 128 hosted UI checks passed at 1440px and 390px widths: the six cards reported
+their photo/concept-logo counts correctly, preview photographs loaded, reference
+and review links remained safe, and the notification was visible. No overflow,
+runtime error or external call was observed. A repeated rebuild reused its
+completed report. The persisted Jarvis notification
+contains all six names and the private review-list link; those identities and
+contact details stay outside this public repository.
+
+No client email, public concept publication, model call, Lovable generation or
+paid voice request was made. No new subscription or paid API call was purchased
+for this rebuild. Installed device voices can read the report after **Enable
+spoken updates**, with Jarvis in the foreground. Physical playback on the owner's
+devices remains unverified. The stored dashboard alert is not evidence of an
+external message or call; existing channel connections and preferences still apply.
+Existing hosting charges continue. The private hosted evidence is
+`/workspace/scratch/photo-showcase-live-verification.json`; hosted UI evidence is
+`/workspace/scratch/showcase-ui/live-report.json`.
+
+## Previous verified immersive release
+
+> **Previous immersive rebuild deployed:** Railway deployment
 > `c2e6861a-691b-4bc5-a9eb-6e1737b69f34` reached **SUCCESS** on 28 October 2026.
 > All 508 workspace tests, the production build, 536 browser/export checks and
 > 115 hosted checks passed. Six qualified research prospects were imported and
@@ -35,7 +77,7 @@ voice with the app in the foreground after **Enable spoken updates**. No playbac
 through the owner's physical speaker has been verified. Existing Railway charges
 and keyless-provider limits remain.
 
-Current validation: 206 core, 260 API, seven MCP, 24 local-agent and eleven UI unit
+Previous immersive validation: 206 core, 260 API, seven MCP, 24 local-agent and eleven UI unit
 tests; 426 renderer/export and 110 review-UI checks. Four generated React projects
 also passed production builds and matched their protected previews. The private
 115-check hosted report remains outside the repository at
@@ -244,13 +286,13 @@ See [VOICE-INTERACTION.md](VOICE-INTERACTION.md).
 ## Branding, greetings and owner updates
 
 The live production transport fetched four real business logos and three photos
-per business for ShineCraft Detailing Hub, Personal Performance Training Centre,
-M&M Mobile Tyre and Auto, and Officer Plumbing Services. Protected concept HTML
-contains embedded raster images and sourced details. The chosen design styles
-were preserved, drafts received new exact hashes, contact eligibility remained
-unestablished, and all five refreshed concepts remained private. Cranbourne
-Fencing supplied an address and phone but explicitly prohibits copying artwork;
-that concept retains original illustrations with the restriction recorded.
+per business for qualified local prospects in detailing, fitness, automotive
+services and plumbing. Protected concept HTML contains embedded raster images
+and sourced details. The chosen design styles were preserved, drafts received new
+exact hashes, contact eligibility remained unestablished, and all five refreshed
+concepts remained private. A fencing prospect supplied published contact details
+but explicitly prohibited copying artwork; that historical concept retained
+original illustrations with the restriction recorded.
 
 The automatic greeting uses the device's own speech voice once per sign-in, with
 no AI/ElevenLabs request. Browser checks cover autoplay needing a tap, voice
@@ -281,8 +323,8 @@ Weak pilot matches were archived with their evidence and previews revoked.
 
 The release imported thirteen source-backed existing/manually researched records.
 Five tailored concepts and matching drafts were verified through actual protected
-HTML reads: Cranbourne Fencing, ShineCraft Detailing Hub, Personal Performance
-Training Centre, M&M Mobile Tyre and Auto, and Officer Plumbing Services. Following
+HTML reads for fencing, detailing, fitness, automotive-service and plumbing
+prospects. Following
 the live discovery check and rejected-match review, the active queue held fifteen
 records and seven private concepts. Search-only identities remain unverified.
 

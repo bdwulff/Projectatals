@@ -24,7 +24,7 @@ describe("business-specific immersive design", () => {
   });
 
   it.each([
-    ["Automotive detailing", "automotive"], ["Carpentry and fencing", "craft"],
+    ["Automotive detailing", "automotive"], ["Garden maintenance", "craft"],
     ["Fitness and personal training", "movement"], ["Cafe and hospitality", "editorial"],
   ])("gives %s its own art direction", (industry, family) => {
     const result = renderDemoWebsite({ ...base, industry });
@@ -34,14 +34,22 @@ describe("business-specific immersive design", () => {
   });
 
   it.each([
-    ["Garden maintenance and lawn mowing", "botanical-terrace"],
-    ["Hair salon and styling", "mirror-and-flow"],
-    ["Malaysian restaurant and cafe", "table-and-vessel"],
-  ])("uses subject-appropriate conceptual artwork for %s", (industry, motif) => {
+    ["Garden maintenance and lawn mowing", "photographic-garden"],
+    ["Hair salon and styling", "photographic-salon"],
+    ["Malaysian restaurant and cafe", "photographic-restaurant"],
+  ])("uses appropriate licensed illustrative photographs for %s", (industry, motif) => {
     const result = renderDemoWebsite({ ...base, industry });
     expect(result.designBrief?.motif).toBe(motif);
-    expect(result.html).toContain("Original conceptual artwork");
-    expect(result.html).not.toMatch(/<img\b/);
+    expect(result.designBrief).toMatchObject({placeholderPhotoCount: 4, businessPhotoCount: 0, logoKind: "concept"});
+    expect(result.html).toContain("Illustrative stock photograph");
+    expect(new Set(Array.from(result.html.matchAll(/src="(data:image\/jpeg;base64,[^"]+)"/g), m => m[1])).size).toBe(4);
+  });
+
+  it.each(["Plumbing and roofing", "Cleaning services", "Accounting", "Carpentry and fencing"])("uses neutral copy and photographs for unsupported %s", industry => {
+    const result = renderDemoWebsite({ ...base, industry });
+    expect(result.designBrief?.sector).toBe("professional");
+    expect(result.html).not.toMatch(/Good gardens|GARDEN &amp; OUTDOOR|Your familiar corner|COFFEE &amp; GOOD COMPANY/);
+    expect(result.html).toContain("Timber fencing");
   });
 
   it("varies composition as well as colour between businesses in the same industry", () => {
@@ -79,7 +87,9 @@ describe("business-specific immersive design", () => {
 
   it("does not invent services, customer proof, street address or business photography", () => {
     const result = renderDemoWebsite({ ...base, services: undefined, businessProfile: undefined });
-    expect(result.html).not.toMatch(/<img\b|testimonial|rated\s*5|trusted by\s*\d|\d+\+\s*years/i);
+    expect(result.html).not.toMatch(/testimonial|rated\s*5|trusted by\s*\d|\d+\+\s*years/i);
+    expect(result.designBrief).toMatchObject({placeholderPhotoCount: 4, businessPhotoCount: 0, logoKind: "concept"});
+    expect(result.html).toContain("Illustrative placeholder photographs");
     expect(result.html).toMatch(/original|conceptual/i);
     expect(result.html).not.toContain("10 Fictional Lane");
     expect(result.html).not.toContain("Timber fencing");
@@ -119,6 +129,7 @@ describe("business-specific immersive design", () => {
     expect(result.html).not.toContain("data:image/svg");
     expect(result.html).not.toContain("Forged asset");
     expect(result.html).not.toContain("SVG attack");
-    expect(result.html).not.toMatch(/<img\b/);
+    expect(result.designBrief).toMatchObject({businessPhotoCount: 0, logoKind: "concept"});
+    expect(result.html).toContain("data:image/jpeg;base64,");
   });
 });

@@ -41,10 +41,12 @@ describe("free-template concept renderer", () => {
   it.each(DEMO_TEMPLATES)("$name is a distinct self-contained design with no active lead collection", template => {
     const result = renderDemoWebsite({ ...business, templateId: template.id });
     expect(result.templateId).toBe(template.id);
-    expect(result.html).toContain(`class="theme-${template.id}"`);
+    expect(result.html).toContain(`theme-${template.id}`);
     expect(result.externalAssets).toEqual([]);
-    expect(result.html).not.toMatch(/<script\b|<iframe\b|<form\b|<input\b|<button\b|<img\b|<link\b|<audio\b|<video\b/i);
-    expect(result.html).not.toMatch(/\b(?:src|srcset|action|style|on\w+)\s*=|href\s*=\s*["'](?:mailto|tel|javascript|data):/i);
+    expect(result.html).not.toMatch(/<script\b|<iframe\b|<form\b|<input\b|<button\b|<link\b|<audio\b|<video\b/i);
+    if (template.id !== "immersive") expect(result.html).not.toMatch(/<img\b/);
+    else expect(result.designBrief).toMatchObject({placeholderPhotoCount:4, businessPhotoCount:0});
+    expect(result.html).not.toMatch(/\b(?:srcset|action|style|on\w+)\s*=|src="(?!data:image\/(?:png|jpeg|webp);base64,)|href\s*=\s*["'](?:mailto|tel|javascript|data):/i);
     expect(result.html).not.toMatch(/(?:[\d.]+[kKmM]?\+? reviews|rated 5|five.star|guarantee|trusted by \d|years of experience)/i);
     const styles = result.html.match(/<style>([\s\S]*?)<\/style>/)?.[1];
     expect(styles).toBeTruthy();
@@ -112,15 +114,22 @@ describe("free-template concept renderer", () => {
 
   it.each(DEMO_TEMPLATES)("$name embeds sourced branding and photos with factual details and explicit provenance", template => {
     const result = renderDemoWebsite({ ...business, templateId: template.id, businessProfile: profile() });
-    expect(result.html).toMatch(/class="(?:business-logo|im-logo)"/);
-    expect(result.html).toMatch(/class="(?:business-hero-image|im-hero-photo)"/);
-    expect(result.html).toMatch(/class="(?:business-gallery|im-gallery im-wrap im-section)"/);
-    expect((result.html.match(/<img /g) ?? []).length).toBe(4);
+    if (template.id === "immersive") {
+      expect(result.html).toContain('class="sp-business-logo im-logo"');
+      expect(result.html).toContain('class="sp-gallery-photo"');
+      expect(result.designBrief).toMatchObject({businessPhotoCount:1,placeholderPhotoCount:4,logoKind:"business"});
+      expect(new Set(Array.from(result.html.matchAll(/src="(data:image\/jpeg;base64,[^"]+)"/g),m=>m[1])).size).toBe(4);
+    } else {
+      expect(result.html).toMatch(/class="business-logo"/);
+      expect(result.html).toMatch(/class="business-hero-image"/);
+      expect(result.html).toMatch(/class="business-gallery"/);
+      expect((result.html.match(/<img /g) ?? []).length).toBe(4);
+    }
     expect(result.html).toContain(`src="data:image/png;base64,${png.toString("base64")}"`);
     expect(result.html).toContain("10 Sample Road, Berwick VIC 3806");
     expect(result.html).toMatch(/Street address \/ business website|Published address/);
     expect(result.html).toContain("The business provides fencing and gate installation in Berwick.");
-    expect(result.html).toMatch(/Business information source ↗|Recorded business information source ↗/);
+    expect(result.html).toMatch(/Business information source|Recorded business information source/);
     expect(result.html).toMatch(/Usage rights require confirmation\.|usage rights need confirmation/);
     expect(result.html).toContain("Their inclusion does not establish ownership, permission or endorsement");
     expect(result.html).toContain('href="https://business.com/images/official-photo.png"');
