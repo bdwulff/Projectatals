@@ -16,6 +16,7 @@ export interface ReconciliationResult {
   paymentsWithoutOrder: { paymentIntentId: string; amountAud: number }[];
   amountMismatches: { orderId: string; paymentIntentId: string; orderTotal: number; paymentAmount: number }[];
   pendingOrdersWithSucceededPayment: { orderId: string; paymentIntentId: string }[];
+  paymentStateMismatches: { orderId: string; paymentIntentId: string; reason: string }[];
   summary: string;
 }
 
@@ -24,7 +25,7 @@ export function reconcile(orders: BoxSafeOrder[], payments: StripePayment[]): Re
   const byIntent = new Map(payments.map((p) => [p.paymentIntentId, p]));
   const bySession = new Map(payments.filter((p) => p.checkoutSessionId).map((p) => [p.checkoutSessionId as string, p]));
   const usedIntents = new Set<string>();
-  const res: ReconciliationResult = { matched: [], ordersWithoutPayment: [], paymentsWithoutOrder: [], amountMismatches: [], pendingOrdersWithSucceededPayment: [], summary: "" };
+  const res: ReconciliationResult = { matched: [], ordersWithoutPayment: [], paymentsWithoutOrder: [], amountMismatches: [], pendingOrdersWithSucceededPayment: [], paymentStateMismatches: [], summary: "" };
 
   for (const o of orders) {
     if (o.status === "cancelled" || o.status === "failed") continue;
@@ -35,15 +36,18 @@ export function reconcile(orders: BoxSafeOrder[], payments: StripePayment[]): Re
     }
     usedIntents.add(p.paymentIntentId);
     if (o.status === "pending" && p.status === "succeeded") res.pendingOrdersWithSucceededPayment.push({ orderId: o.id, paymentIntentId: p.paymentIntentId });
+    const expectsCollected = o.status === "paid" || o.status === "partially_refunded";
+    const validState = expectsCollected ? p.status === "succeeded" : o.status === "refunded" ? p.status === "refunded" || (p.status === "succeeded" && p.refundedAud === p.amountAud) : true;
+    if (!validState) res.paymentStateMismatches.push({ orderId: o.id, paymentIntentId: p.paymentIntentId, reason: "Order and Stripe payment states disagree" });
     if (Math.abs(p.amountAud - o.total) > 0.005) res.amountMismatches.push({ orderId: o.id, paymentIntentId: p.paymentIntentId, orderTotal: o.total, paymentAmount: p.amountAud });
-    else if (o.status === "paid" || o.status === "partially_refunded" || o.status === "refunded") res.matched.push({ orderId: o.id, paymentIntentId: p.paymentIntentId });
+    else if (validState && (o.status === "paid" || o.status === "partially_refunded" || o.status === "refunded")) res.matched.push({ orderId: o.id, paymentIntentId: p.paymentIntentId });
   }
   for (const p of payments) {
     if (p.status === "succeeded" && !usedIntents.has(p.paymentIntentId)) res.paymentsWithoutOrder.push({ paymentIntentId: p.paymentIntentId, amountAud: p.amountAud });
   }
-  const issues = res.ordersWithoutPayment.length + res.paymentsWithoutOrder.length + res.amountMismatches.length + res.pendingOrdersWithSucceededPayment.length;
+  const issues = res.ordersWithoutPayment.length + res.paymentsWithoutOrder.length + res.amountMismatches.length + res.pendingOrdersWithSucceededPayment.length + res.paymentStateMismatches.length;
   res.summary = issues === 0
     ? `All ${res.matched.length} paid orders reconcile with Stripe.`
-    : `${res.matched.length} orders reconcile. ${issues} issue${issues === 1 ? "" : "s"}: ${res.ordersWithoutPayment.length} paid without Stripe payment, ${res.paymentsWithoutOrder.length} Stripe payments with no order, ${res.amountMismatches.length} amount mismatches, ${res.pendingOrdersWithSucceededPayment.length} pending orders with a successful payment (webhook may have been missed).`;
+    : `${res.matched.length} orders reconcile. ${issues} issue${issues === 1 ? "" : "s"}: ${res.ordersWithoutPayment.length} paid without Stripe payment, ${res.paymentsWithoutOrder.length} Stripe payments with no order, ${res.amountMismatches.length} amount mismatches, ${res.pendingOrdersWithSucceededPayment.length} pending orders with a successful payment (webhook may have been missed), ${res.paymentStateMismatches.length} payment state mismatches.`;
   return res;
 }

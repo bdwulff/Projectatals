@@ -10,6 +10,7 @@ import { reconcile, type ReconciliationResult } from "./boxsafe/reconcile.js";
 import type { BoxSafeGateway, ConnectionStatus, Mailer, Mailbox, StripeGateway, Telephony, WebsiteChecker, SpeechSynth } from "./adapters/types.js";
 import { composeBriefing, type Briefing } from "./briefing.js";
 import { needsOwnerApproval, isHumanOnly, type ActionKind, PermissionDeniedError } from "./permissions.js";
+import { ResearchUnavailableError, type ResearchLookupInput, type ResearchLookupResult } from "./adapters/research.js";
 import { newId, nowIso } from "./ids.js";
 
 export interface ProspectCandidate {
@@ -53,6 +54,7 @@ export interface AtlasConfig {
   businessFromAddress: string;
   budgetLimitAud: number;
   gstRegistered: boolean;
+  ownerCallsEnabled?: boolean;
 }
 
 export interface AtlasDeps {
@@ -66,6 +68,7 @@ export interface AtlasDeps {
   speech?: SpeechSynth;
   pushNotifier?: Notifier;
   research: ResearchSource;
+  lookup?: { lookup(input: ResearchLookupInput): Promise<ResearchLookupResult[]>; status(): Promise<ConnectionStatus> };
   clock?: () => Date;
   config: AtlasConfig;
 }
@@ -84,6 +87,8 @@ export type Intent =
   | { kind: "wulff.reject_quote" }
   | { kind: "wulff.check_website"; target: string | null }
   | { kind: "wulff.explain_delay"; target: string | null }
+  | { kind: "research.lookup"; query: string }
+  | { kind: "owner.test_call" }
   | { kind: "status" }
   | { kind: "unknown"; text: string };
 
@@ -94,17 +99,20 @@ export interface IntentParser {
 /** Deterministic parser. A Claude-backed parser can replace it behind the same interface. */
 export class RuleIntentParser implements IntentParser {
   async parse(raw: string): Promise<Intent> {
-    const t = raw.trim().toLowerCase().replace(/^(hey |ok |okay )?atlas[,.]?\s*/, "");
+    const cleaned = raw.trim().replace(/^(?:(?:hey|ok|okay)\s+)?(?:atlas|jarvis)\b[,.]?\s*/i, "");
+    const t = cleaned.toLowerCase();
     const range = (/\bweek\b/.test(t) ? "week" : /\bmonth\b/.test(t) ? "month" : "today") as "today" | "week" | "month";
     if (/(morning|briefing|what'?s happening|what is happening|across my businesses|run wulff)/.test(t) && !/boxsafe order/.test(t)) return { kind: "briefing" };
-    if (/status|connected|online/.test(t) && /atlas|system|connection/.test(t)) return { kind: "status" };
+    if (/status|connected|online/.test(t) && (/atlas|jarvis|system|connection/.test(t) || /^(?:status|are you (?:online|connected)|what'?s your status)\??$/.test(t))) return { kind: "status" };
     if (/(merch|merchandise).*(post|ship|dispatch)|need.*(posting|dispatch|shipping)/.test(t)) return { kind: "boxsafe.dispatch" };
     if (/(stripe|payments).*(against|reconcile|check|match)|reconcile/.test(t)) return { kind: "boxsafe.reconcile", range };
     if (/how much.*(boxsafe|received|made|money)|boxsafe.*(revenue|received|made)/.test(t)) return { kind: "boxsafe.revenue", range };
     if (/boxsafe.*(order|report)|orders.*boxsafe/.test(t)) return { kind: "boxsafe.orders", range };
-    if (/find .*(business|lead|prospect)/.test(t)) {
+    if (/^(call me|test (my |the )?(phone|call))\b/.test(t)) return { kind: "owner.test_call" };
+    if (/^(look up|search for|research)\s+/.test(t)) return { kind: "research.lookup", query: cleaned.replace(/^(?:look up|search for|research)\s+/i, "").trim() };
+    if (/find .*(business|lead|prospect|client)/.test(t)) {
       const count = Number(/(\d+|five|five|three|ten)/.exec(t)?.[1]?.replace("five", "5").replace("three", "3").replace("ten", "10") ?? 5) || 5;
-      const area = /around ([a-z ]+?)(?: that| who| with|$)/.exec(t)?.[1]?.trim() ?? "Officer, Berwick, Pakenham, Cranbourne, Dandenong";
+      const area = /(?:around|in|near) ([a-z ]+?)(?: that| who| with|$)/.exec(t)?.[1]?.trim() ?? "Officer, Berwick, Pakenham, Cranbourne, Dandenong";
       return { kind: "wulff.find_prospects", area, count };
     }
     if (/best lead|strongest (lead|opportunity)/.test(t)) return { kind: "wulff.best_lead" };
@@ -172,13 +180,14 @@ export class Atlas {
 
   // ───────────────────────── connections ─────────────────────────
   async connections(): Promise<ConnectionStatus[]> {
-    const adapters = [this.deps.boxsafe, this.deps.stripe, this.deps.mailer, this.deps.telephony, this.deps.websiteChecker, this.deps.mailbox, this.deps.speech].filter(Boolean) as { status(): Promise<ConnectionStatus> }[];
+    const adapters = [this.deps.boxsafe, this.deps.stripe, this.deps.mailer, this.deps.telephony, this.deps.websiteChecker, this.deps.mailbox, this.deps.speech, this.deps.lookup].filter(Boolean) as { status(): Promise<ConnectionStatus> }[];
+    if (this.deps.pushNotifier && "status" in this.deps.pushNotifier && typeof this.deps.pushNotifier.status === "function") adapters.push(this.deps.pushNotifier as typeof adapters[number]);
     return Promise.all(adapters.map((a) => a.status()));
   }
 
   // ───────────────────────── Wulff Studio: research ─────────────────────────
-  async researchProspects(input: { area: string; count: number }): Promise<Prospect[]> {
-    const candidates = await this.deps.research.find({ area: input.area, count: input.count });
+  async researchProspects(input: { area: string; count: number; industries?: string[] }): Promise<Prospect[]> {
+    const candidates = await this.deps.research.find({ area: input.area, count: input.count, industries: input.industries });
     const out: Prospect[] = [];
     for (const c of candidates) {
       const evidence: Evidence[] = [];
@@ -356,18 +365,21 @@ export class Atlas {
   async reconcileBoxSafe(range: "today" | "week" | "month"): Promise<ReconciliationResult & { mode: "live" | "fake" }> {
     const r = melbourneDayRange(this.clock(), range);
     const from = new Date(r.from.getTime() - 7 * 86_400_000);
-    const [orders, payments, status] = await Promise.all([this.deps.boxsafe.listOrders({ from, to: r.to }), this.deps.stripe.listPayments({ from, to: r.to }), this.deps.boxsafe.status()]);
+    const [boxStatus, stripeStatus] = await Promise.all([this.deps.boxsafe.status(), this.deps.stripe.status()]);
+    if (boxStatus.mode !== stripeStatus.mode || !["connected", "fake"].includes(boxStatus.state) || !["connected", "fake"].includes(stripeStatus.state)) throw new Error("Reconciliation unavailable: BoxSafe and Stripe must both be connected in the same mode. No fictional fallback.");
+    const status = boxStatus;
+    const [orders, payments] = await Promise.all([this.deps.boxsafe.listOrders({ from, to: r.to }), this.deps.stripe.listPayments({ from, to: r.to })]);
     const result = reconcile(orders, payments);
-    for (const p of result.pendingOrdersWithSucceededPayment) await this.notifications.emit({ eventKey: `boxsafe:reconcile:pending-paid:${p.orderId}`, priority: "action_needed", business: "boxsafe", title: `Order ${p.orderId} paid in Stripe but still pending in BoxSafe`, body: "The Stripe webhook may have been missed. The existing reconcile-pending-orders function can repair this with your approval.", link: { type: "order", id: p.orderId } });
+    for (const p of result.pendingOrdersWithSucceededPayment) await this.notifications.emit({ eventKey: `boxsafe:reconcile:pending-paid:${p.orderId}`, priority: "action_needed", business: "boxsafe", title: `Order ${p.orderId} paid in Stripe but still pending in BoxSafe`, body: "The Stripe webhook may have been missed. Do not invoke repair functions. An authenticated, reviewed correction path is required before any production repair.", link: { type: "order", id: p.orderId } });
     for (const p of result.paymentsWithoutOrder) await this.notifications.emit({ eventKey: `boxsafe:reconcile:orphan-payment:${p.paymentIntentId}`, priority: "action_needed", business: "boxsafe", title: `Stripe payment ${p.paymentIntentId} (A$${p.amountAud}) has no BoxSafe order`, body: "Possible orphaned checkout. Needs manual review." });
     this.audit.record({ actor: "agent:finance", action: "boxsafe.reconciled", business: "boxsafe", outcome: "completed", detail: { range, matched: result.matched.length, issues: result.ordersWithoutPayment.length + result.paymentsWithoutOrder.length + result.amountMismatches.length + result.pendingOrdersWithSucceededPayment.length, mode: status.mode } });
     return { ...result, mode: status.mode };
   }
 
-  async boxsafeDispatchList(): Promise<{ orders: BoxSafeOrder[]; packingSummary: string[] }> {
+  async boxsafeDispatchList(): Promise<{ orders: BoxSafeOrder[]; packingSummary: string[]; mode: "live" | "fake" }> {
     const orders = await this.deps.boxsafe.listOrdersNeedingDispatch();
     const packingSummary = orders.map((o) => `${o.id}: ${o.customerName}: ${o.items.filter((i) => i.requiresShipping).map((i) => `${i.quantity} x ${i.productName}${i.variantLabel ? ` (${i.variantLabel})` : ""}`).join(", ")} [${o.fulfillmentStatus}]`);
-    return { orders, packingSummary };
+    return { orders, packingSummary, mode: (await this.deps.boxsafe.status()).mode };
   }
 
   // ───────────────────────── Briefing ─────────────────────────
@@ -395,28 +407,52 @@ export class Atlas {
 
   // ───────────────────────── Scheduled run ─────────────────────────
   /** The recurring "run Wulff Studio and BoxSafe" tick. Safe to run repeatedly: everything is keyed. */
-  async runScheduledChecks(): Promise<{ ran: string[]; notifications: number }> {
+  async runScheduledChecks(): Promise<{ ran: string[]; notifications: number; failed?: string[] }> {
     const before = this.notifications.list().length;
     const ran: string[] = [];
-    await this.boxsafeSummary("today"); ran.push("boxsafe.summary");
-    await this.reconcileBoxSafe("today"); ran.push("boxsafe.reconcile");
-    const dispatch = await this.boxsafeDispatchList();
-    if (dispatch.orders.length) { await this.notifications.emit({ eventKey: `boxsafe:dispatch:${dispatch.orders.map((o) => o.id).sort().join(",")}`, priority: "routine", business: "boxsafe", title: `${dispatch.orders.length} merchandise order${dispatch.orders.length === 1 ? "" : "s"} awaiting dispatch`, body: dispatch.packingSummary.join("\n") }); ran.push("boxsafe.dispatch"); }
+    const failed: string[] = [];
+    const task = async (name: string, fn: () => Promise<unknown>) => {
+      try { await fn(); ran.push(name); }
+      catch {
+        failed.push(name);
+        this.audit.record({ actor: "system", action: `scheduled.${name}`, business: "atlas", outcome: "failed", detail: { reason: "Connection or operation unavailable; provider details withheld" } });
+        await this.notifications.emit({ eventKey: `connection:unavailable:${name}`, priority: "action_needed", business: "atlas", title: `${name} check unavailable`, body: "Check connection status. No substitute fictional results were used." });
+      }
+    };
+    await task("boxsafe.summary", () => this.boxsafeSummary("today"));
+    await task("boxsafe.reconcile", () => this.reconcileBoxSafe("today"));
+    await task("boxsafe.dispatch", async () => {
+      const dispatch = await this.boxsafeDispatchList();
+      if (dispatch.orders.length) await this.notifications.emit({ eventKey: `boxsafe:dispatch:${dispatch.orders.map((o) => o.id).sort().join(",")}`, priority: "routine", business: "boxsafe", title: `${dispatch.orders.length} merchandise orders awaiting dispatch`, body: dispatch.packingSummary.join("\n") });
+    });
     const stale = this.approvals.pending().filter((a) => this.clock().getTime() - new Date(a.requestedAt).getTime() > 2 * 86_400_000);
     for (const a of stale) await this.notifications.emit({ eventKey: `approval:stale:${a.id}`, priority: "action_needed", business: a.business, title: `Still waiting on: ${a.title}`, body: "Requested more than two days ago.", link: { type: "approval", id: a.id } });
-    if (this.deps.mailbox) {
-      const unread = await this.deps.mailbox.listUnread();
+    if (this.deps.mailbox) await task("inbox", async () => {
+      const unread = await this.deps.mailbox!.listUnread();
       for (const m of unread) {
         await this.notifications.emit({ eventKey: `inbox:${m.id}`, priority: /urgent|down|broken|not working/i.test(m.subject + m.text) ? "action_needed" : "routine", business: "wulff_studio", title: `Enquiry from ${m.from}: ${m.subject}`, body: m.text.slice(0, 280) });
-        await this.deps.mailbox.markHandled(m.id);
+        await this.deps.mailbox!.markHandled(m.id);
       }
-      ran.push("inbox");
+    });
+    if (this.deps.config.ownerCallsEnabled) {
+      for (const n of this.notifications.list({ unacknowledgedOnly: true }).filter(n => n.priority === "critical")) {
+        this.jobs.enqueue("owner_call", { notificationId: n.id }, { idempotencyKey: `owner_call:${n.eventKey}`, maxAttempts: 1 });
+      }
     }
-    await this.jobs.runOnce(); ran.push("jobs");
-    return { ran, notifications: this.notifications.list().length - before };
+    await task("jobs", () => this.jobs.runOnce());
+    return { ran, notifications: this.notifications.list().length - before, failed };
   }
 
   private registerJobs(): void {
+    this.jobs.register<{ notificationId: string }, unknown>("owner_call", async (p) => {
+      const notification = this.notifications.list().find(n => n.id === p.notificationId);
+      if (!notification || notification.acknowledgedAt || !this.deps.config.ownerCallsEnabled) return { attempted: false, status: "disabled or resolved" };
+      return this.escalateByPhone(notification);
+    });
+    this.jobs.register<{ reason: string }, unknown>("owner_test_call", async (p) => {
+      if (!this.deps.config.ownerPhone) throw new Error("Owner phone missing");
+      return this.deps.telephony.call({ to: this.deps.config.ownerPhone, script: "Hello Brandon. This is your Atlas owner notification test. Please check your Atlas dashboard for details.", reason: p.reason });
+    });
     this.jobs.register<{ quoteId: string; version: number }, { providerRef: string }>("send_quote", async (p) => {
       const r = await this.sendQuote(p.quoteId);
       return { providerRef: r.providerRef };
@@ -431,11 +467,26 @@ export class Atlas {
     const resolveProspect = (target: string | null): Prospect | null => (target ? this.prospects.findByName(target) : null) ?? (lastProspectId ? this.prospects.get(lastProspectId) : null) ?? this.prospects.bestLead();
     try {
       switch (intent.kind) {
+        case "research.lookup": {
+          if (!this.deps.lookup) return { reply: "Live web lookup is not connected. No results were invented.", intent, outcome: "denied" };
+          const results = await this.deps.lookup.lookup({ query: intent.query, count: 5 });
+          return { reply: results.length ? results.map((r, n) => `${n + 1}. ${r.title}: ${r.description} Source: ${r.url}`).join("\n") + "\nSearch excerpts are unverified source material." : "No search results found.", intent, data: results, outcome: "completed" };
+        }
+        case "owner.test_call": {
+          const status = await this.deps.telephony.status();
+          if (status.mode !== "live" || status.state !== "connected" || !this.deps.config.ownerPhone) return { reply: "Owner calls are not connected. No call was placed.", intent, outcome: "denied" };
+          const reason = `owner-requested-test:${melbourneDayRange(this.clock(), "today").from.toISOString()}`;
+          const { job } = this.jobs.enqueue("owner_test_call", { reason }, { idempotencyKey: reason, maxAttempts: 1 });
+          await this.jobs.runOnce();
+          const updated = this.deps.store.getJobByKey(job.idempotencyKey);
+          const result = (updated?.result ?? { status: "failed", detail: "Call was not confirmed. Check the job record." }) as { providerRef?: string; status: string; detail?: string };
+          return { reply: result.providerRef && result.status !== "failed" ? `Call submitted to Twilio (${result.providerRef}). Answer and delivery are not yet confirmed.` : `Call not submitted: ${result.detail ?? "provider refusal"}`, intent, data: result, outcome: result.providerRef && result.status !== "failed" ? "attempted" : "denied" };
+        }
         case "briefing": { const b = await this.briefing(); return { reply: b.spoken, intent, data: b, outcome: "completed" }; }
         case "status": { const c = await this.connections(); return { reply: `Atlas is online. ${c.filter((x) => x.state === "connected").length} of ${c.length} connections live: ${c.map((x) => `${x.name} ${x.state}`).join("; ")}.`, intent, data: c, outcome: "completed" }; }
         case "boxsafe.orders": { const r = await this.boxsafeSummary(intent.range); return { reply: spokenOrderSummary(r.summary) + (r.mode === "fake" ? " (fictional data)" : ""), intent, data: r, outcome: r.mode === "fake" ? "simulated" : "completed" }; }
         case "boxsafe.revenue": { const r = await this.boxsafeSummary(intent.range); return { reply: `Verified BoxSafe payments ${r.summary.range.label}: A$${r.summary.verifiedRevenueAud.toFixed(2)} from ${r.summary.paidOrders} paid orders, before Stripe fees${r.summary.refundsAud ? `, after A$${r.summary.refundsAud.toFixed(2)} refunds` : ""}. ${r.summary.pendingOrders} pending orders are excluded.${r.mode === "fake" ? " (fictional data)" : ""}`, intent, data: r.summary, outcome: r.mode === "fake" ? "simulated" : "completed" }; }
-        case "boxsafe.dispatch": { const r = await this.boxsafeDispatchList(); return { reply: r.orders.length ? `${r.orders.length} orders need posting: ${r.packingSummary.join(". ")}` : "No merchandise orders are waiting for dispatch.", intent, data: r, outcome: "completed" }; }
+        case "boxsafe.dispatch": { const r = await this.boxsafeDispatchList(); return { reply: r.orders.length ? `${r.orders.length} orders need posting: ${r.packingSummary.join(". ")}` : "No merchandise orders are waiting for dispatch.", intent, data: r, outcome: r.mode === "fake" ? "simulated" : "completed" }; }
         case "boxsafe.reconcile": { const r = await this.reconcileBoxSafe(intent.range); return { reply: r.summary + (r.mode === "fake" ? " (fictional data)" : ""), intent, data: r, outcome: r.mode === "fake" ? "simulated" : "completed" }; }
         case "wulff.find_prospects": {
           const ps = await this.researchProspects({ area: intent.area, count: intent.count });
@@ -469,7 +520,8 @@ export class Atlas {
         this.audit.record({ actor: "atlas", action: "command.denied", business: "atlas", outcome: "denied", detail: { text, error: err.message } });
         return { reply: `I can't do that without the right approval: ${err.message}`, intent, outcome: "denied" };
       }
-      throw err;
+      this.audit.record({ actor: "atlas", action: "command.unavailable", business: "atlas", outcome: "failed", detail: { intent: intent.kind, reason: "Required connection or operation unavailable; provider details withheld" } });
+      return { reply: err instanceof ResearchUnavailableError ? err.message : "I could not complete that operation because a required connection or service is unavailable. Check Connections and the job history. No substitute fictional result was produced.", intent, outcome: "denied" };
     }
   }
 }

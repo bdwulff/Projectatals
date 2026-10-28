@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Jarvis",
+  "short_name": "Jarvis",
+  "description": "Your private Jarvis command centre for Wulff Studio and BoxSafe.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#060c10",
+  "theme_color": "#060c10",
+  "lang": "en-AU",
+  "icons": [
+    {
+      "src": "/jarvis.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

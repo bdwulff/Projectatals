@@ -12,12 +12,20 @@ export enum PermissionLevel {
 
 export type ActionKind =
   // Level 1 — Read
+  | "read.device.status"
+  | "read.device.files"
   | "read.records"
+  | "read.mail.inbox"
+  | "read.mail.message"
+  | "read.discovery.program"
+  | "read.discovery.source"
+  | "read.site_rebuilds"
   | "read.website"
   | "read.boxsafe.orders"
   | "read.boxsafe.members"
   | "read.stripe.payments"
   // Level 2 — Prepare
+  | "prepare.owner_transcription"
   | "prepare.research"
   | "prepare.quote_draft"
   | "prepare.email_draft"
@@ -25,6 +33,12 @@ export type ActionKind =
   | "prepare.code_change"
   | "prepare.fulfilment_summary"
   // Level 3 — Execute approved routine actions
+  | "execute.owner_speech"
+  | "execute.discovery.configure"
+  | "execute.discovery.run"
+  | "execute.site_rebuilds.run"
+  | "execute.device.open_browser"
+  | "execute.device.open_app"
   | "execute.internal_notification"
   | "execute.schedule_job"
   | "execute.record_update"
@@ -45,17 +59,31 @@ export type ActionKind =
   | "human.medical_or_eligibility_decision";
 
 const LEVELS: Record<ActionKind, PermissionLevel> = {
+  "read.device.status": PermissionLevel.Read,
+  "read.device.files": PermissionLevel.Read,
   "read.records": PermissionLevel.Read,
+  "read.mail.inbox": PermissionLevel.Read,
+  "read.mail.message": PermissionLevel.Read,
+  "read.discovery.program": PermissionLevel.Read,
+  "read.discovery.source": PermissionLevel.Read,
+  "read.site_rebuilds": PermissionLevel.Read,
   "read.website": PermissionLevel.Read,
   "read.boxsafe.orders": PermissionLevel.Read,
   "read.boxsafe.members": PermissionLevel.Read,
   "read.stripe.payments": PermissionLevel.Read,
+  "prepare.owner_transcription": PermissionLevel.Prepare,
   "prepare.research": PermissionLevel.Prepare,
   "prepare.quote_draft": PermissionLevel.Prepare,
   "prepare.email_draft": PermissionLevel.Prepare,
   "prepare.design_concept": PermissionLevel.Prepare,
   "prepare.code_change": PermissionLevel.Prepare,
   "prepare.fulfilment_summary": PermissionLevel.Prepare,
+  "execute.owner_speech": PermissionLevel.ExecuteRoutine,
+  "execute.discovery.configure": PermissionLevel.ExecuteRoutine,
+  "execute.discovery.run": PermissionLevel.ExecuteRoutine,
+  "execute.site_rebuilds.run": PermissionLevel.ExecuteRoutine,
+  "execute.device.open_browser": PermissionLevel.ExecuteRoutine,
+  "execute.device.open_app": PermissionLevel.ExecuteRoutine,
   "execute.internal_notification": PermissionLevel.ExecuteRoutine,
   "execute.schedule_job": PermissionLevel.ExecuteRoutine,
   "execute.record_update": PermissionLevel.ExecuteRoutine,

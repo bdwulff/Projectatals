@@ -52,7 +52,7 @@ export function BoxSafe() {
           <RefreshButton onClick={() => { void orders.refresh(); void dispatch.refresh(); void recon.refresh(); }} loading={orders.loading} updatedAt={orders.updatedAt} />
         </div>
       </header>
-      <ErrorBanner message={orders.error} />
+      {orders.error && !orders.data ? <Card label="BoxSafe data" title="Orders aren’t available yet."><p className="text-sm leading-relaxed text-slate-400">Jarvis couldn’t retrieve your orders. Check the BoxSafe connection, then refresh this page.</p><a href="#overview" className="mt-4 inline-block text-xs text-accent-soft hover:underline">Review connections on Overview →</a></Card> : <ErrorBanner message={orders.error} />}
       {!orders.data && !orders.error && <Loading label="Loading orders" />}
 
       {s && (

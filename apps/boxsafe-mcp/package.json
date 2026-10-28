@@ -1,0 +1,23 @@
+{
+  "name": "@atlas/boxsafe-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && vitest run",
+    "start": "node --no-warnings dist/server.js",
+    "demo": "node --no-warnings dist/demo.js"
+  },
+  "dependencies": {
+    "@atlas/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

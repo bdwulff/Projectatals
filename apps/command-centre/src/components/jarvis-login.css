@@ -1,0 +1,142 @@
+.jl-shell {
+  --jl-cyan: #8cecf5;
+  --jl-white: #eaf4f5;
+  --jl-muted: #789097;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100svh;
+  overflow: hidden;
+  padding: 30px clamp(24px, 5vw, 80px) 24px;
+  color: var(--jl-white);
+  background: radial-gradient(ellipse at 30% 50%, #0b1c23 0, #070d12 34%, #04080c 70%);
+  font-family: "Avenir Next", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.jl-shell::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  opacity: .11;
+  background-image: linear-gradient(#789fa312 1px, transparent 1px), linear-gradient(90deg, #789fa312 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(90deg, #000, transparent 75%);
+}
+.jl-header, .jl-footer, .jl-main { position: relative; z-index: 1; }
+.jl-header, .jl-wordmark, .jl-footer { display: flex; align-items: center; }
+.jl-header { justify-content: space-between; gap: 20px; }
+.jl-wordmark { gap: 16px; color: #96abb1; font-size: 9px; letter-spacing: .19em; }
+.jl-mark { color: var(--jl-cyan); font-size: 25px; font-weight: 500; line-height: 1; letter-spacing: -.06em; }
+.jl-header-divider, .jl-footer-slash { margin: 0 13px; color: #2e525b; }
+.jl-location { color: #50676f; font-size: 8px; letter-spacing: .2em; }
+.jl-main { display: grid; grid-template-columns: 1.15fr .85fr; align-items: center; gap: clamp(42px, 8vw, 120px); width: min(1100px, 100%); margin: 65px auto; }
+.jl-eyebrow { display: flex; align-items: center; gap: 12px; color: #64848d; font-size: 8px; font-weight: 500; letter-spacing: .23em; }
+.jl-small-rule { display: inline-block; width: 22px; height: 1px; background: #58a8b5; }
+.jl-brand { margin-top: 18px; color: #f0f8f9; font-size: clamp(38px, 4.6vw, 68px); font-weight: 300; line-height: 1.2; letter-spacing: .14em; }
+.jl-intro-copy { display: flex; gap: .35em; margin: 12px 0 0; color: #80979f; font-size: 15px; font-weight: 300; line-height: 1.7; letter-spacing: .02em; }
+.jl-intro-copy span { color: #bdd0d5; }
+.jl-core { position: relative; width: 326px; height: 326px; margin: 30px auto 24px; isolation: isolate; }
+.jl-core-grid { position: absolute; inset: -35px; background: radial-gradient(ellipse, #63d8ec10 0, transparent 60%); }
+.jl-ring { position: absolute; border-radius: 50%; }
+.jl-ring-outer { inset: 0; border: 1px solid #4d839226; box-shadow: 0 0 0 9px #74d5eb02; }
+.jl-ring-ticks { inset: 12px; background: repeating-conic-gradient(from -1deg, #6ab7c35c 0deg .45deg, transparent .45deg 6deg); mask: radial-gradient(transparent 68%, #000 69%); opacity: .6; }
+.jl-ring-orbit { inset: 35px; background: conic-gradient(from 25deg, transparent 0deg 60deg, #a2f2fa 70deg, transparent 72deg 205deg, #55bbcf 240deg, transparent 242deg); mask: radial-gradient(transparent 68.6%, #000 69.5%); animation: jl-orbit 38s linear infinite; filter: drop-shadow(0 0 4px #89f0ff70); }
+.jl-ring-inner { inset: 57px; border: 1px solid #6fbdcd35; box-shadow: 0 0 0 8px #69d9ef03, inset 0 0 24px #3e9cab0c; }
+.jl-core-cross { position: absolute; background: #5c899c20; }
+.jl-core-cross-horizontal { height: 1px; width: 115%; top: 50%; left: -7.5%; }
+.jl-core-cross-vertical { width: 1px; height: 115%; left: 50%; top: -7.5%; }
+.jl-nucleus { position: absolute; inset: 84px; display: flex; align-items: center; justify-content: center; border: 1px solid #a3eff738; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #1e485c 0, #0d2734 45%, #0a1720 80%); box-shadow: 0 0 45px #72e6ff12, inset 0 1px 15px #a3e3ff08; animation: jl-breathe 8s ease-in-out infinite; }
+.jl-nucleus::before { position: absolute; inset: 9px; border-radius: 50%; border: 1px solid #8bd4e510; content: ""; }
+.jl-nucleus-mark { color: #aeeef5; font-size: 65px; font-weight: 200; line-height: 1; transform: translate(2px, -2px); text-shadow: 0 0 20px #8ff0ff1c; }
+.jl-nucleus-dot { width: 4px; height: 4px; border-radius: 50%; margin: 33px 0 0 5px; background: #d2faff; box-shadow: 0 0 10px #77e4f3; }
+.jl-orbit-point { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #a3edfa; box-shadow: 0 0 7px #7ad5ed; }
+.jl-orbit-point-one { left: 38px; top: 49px; }
+.jl-orbit-point-two { right: 20px; bottom: 77px; width: 3px; height: 3px; background: #c4a765; box-shadow: 0 0 6px #bd975a50; }
+.jl-businesses { display: flex; align-items: center; justify-content: center; gap: 18px; color: #69818a; font-size: 8px; letter-spacing: .22em; }
+.jl-business-divider { width: 23px; height: 1px; background: #335563; }
+.jl-access { position: relative; width: 100%; max-width: 410px; margin-left: auto; border: 1px solid #6b9da71f; background: linear-gradient(135deg, #11202b35, #070d12b3); }
+.jl-access::before { position: absolute; top: -1px; left: -1px; width: 64px; height: 1px; content: ""; background: linear-gradient(90deg, #8be1e5a1, transparent); }
+.jl-access::after { position: absolute; right: -1px; bottom: -1px; height: 36px; width: 1px; content: ""; background: #8be1e56b; }
+.jl-access-topline { display: flex; align-items: center; justify-content: space-between; padding: 18px 25px; border-bottom: 1px solid #76a7b017; color: #69858f; font-size: 8px; letter-spacing: .22em; }
+.jl-access-topline svg { color: #6f9ba5; }
+.jl-access-content { padding: 38px 32px 37px; }
+.jl-state { display: flex; align-items: center; gap: 8px; color: #6a929e; font-size: 7px; letter-spacing: .17em; }
+.jl-state-dot { width: 4px; height: 4px; background: #85d7e3; border-radius: 50%; box-shadow: 0 0 7px #68b9cd45; }
+.jl-state-amber { color: #b8a070; }
+.jl-state-amber .jl-state-dot { background: #c8a35e; box-shadow: 0 0 7px #c8a35e45; }
+.jl-heading { margin: 18px 0 10px; color: #e8f1f4; font-size: 30px; line-height: 1.25; font-weight: 350; letter-spacing: -.03em; }
+.jl-description { max-width: 300px; margin: 0; color: #7e969f; font-size: 12px; line-height: 1.85; }
+.jl-form { margin-top: 32px; }
+.jl-input-label { display: block; margin-bottom: 10px; color: #b0c3ca; font-size: 10px; letter-spacing: .025em; }
+.jl-input-wrap { display: flex; align-items: center; gap: 11px; height: 49px; border: 1px solid #5977823d; background: #02080d69; padding: 0 14px; transition: border-color .2s, box-shadow .2s; }
+.jl-input-wrap > svg { flex-shrink: 0; color: #61828d; }
+.jl-input-wrap:focus-within { border-color: #7ac3cfaa; box-shadow: 0 0 0 3px #6ad9ee0b; }
+.jl-input { display: block; width: 100%; min-width: 0; border: 0; padding: 10px 0; outline: none; color: #e3f2f6; background: transparent; font: inherit; font-size: 14px; }
+.jl-input::placeholder { color: #49636f; font-size: 11px; }
+.jl-input:disabled { opacity: .6; }
+.jl-enter { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; min-height: 49px; padding: 0 17px; border: 1px solid #9ce5eb; background: #a0e9ee; color: #08212b; font: inherit; font-size: 11px; font-weight: 600; letter-spacing: .025em; cursor: pointer; transition: background .2s, box-shadow .2s, opacity .2s; }
+.jl-enter:hover:not(:disabled) { background: #c5f3f4; box-shadow: 0 0 25px #74e6eb16; }
+.jl-enter:focus-visible { outline: 2px solid #b2f4ff; outline-offset: 4px; }
+.jl-enter:disabled { opacity: .32; cursor: not-allowed; }
+.jl-form-note { margin-top: 13px; color: #4d6975; font-size: 9px; line-height: 1.7; }
+.jl-access-footer { display: flex; align-items: center; gap: 10px; padding: 17px 25px; border-top: 1px solid #76a7b017; color: #496471; font-size: 6px; letter-spacing: .15em; }
+.jl-access-footer .jl-small-rule { width: 12px; background: #476f7b; }
+.jl-error { margin: 20px 0 0; border-left: 1px solid #caa663; padding: 10px 12px; background: #c7a15c0b; color: #cfb780; font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.jl-wait { display: flex; align-items: center; gap: 10px; min-height: 125px; color: #82a6b1; font-size: 12px; }
+.jl-retry { margin-top: 28px; }
+.jl-spinner { animation: jl-orbit 1s linear infinite; }
+.jl-footer { width: 100%; gap: 22px; color: #46616d; font-size: 7px; letter-spacing: .18em; }
+.jl-footer-line { flex: 1; height: 1px; background: linear-gradient(90deg, #36566235, #36566210); }
+@keyframes jl-orbit { to { transform: rotate(360deg); } }
+@keyframes jl-breathe { 0%, 100% { box-shadow: 0 0 40px #72e6ff10, inset 0 1px 15px #a3e3ff08; } 50% { box-shadow: 0 0 65px #72e6ff20, inset 0 1px 15px #a3e3ff10; } }
+@media (min-width: 1500px) { .jl-main { margin-top: 100px; margin-bottom: 100px; } }
+@media (max-width: 900px) {
+  .jl-shell { padding: 24px 30px 22px; }
+  .jl-main { gap: 40px; }
+  .jl-brand { font-size: 39px; }
+  .jl-core { width: 275px; height: 275px; margin: 36px auto 25px; }
+  .jl-ring-inner { inset: 49px; }
+  .jl-nucleus { inset: 72px; }
+  .jl-nucleus-mark { font-size: 52px; }
+  .jl-access-content { padding: 30px 23px; }
+}
+@media (max-width: 680px) {
+  .jl-shell { padding: 22px 24px max(20px, env(safe-area-inset-bottom)); }
+  .jl-header { gap: 10px; }
+  .jl-wordmark { gap: 13px; font-size: 7px; letter-spacing: .16em; }
+  .jl-mark { font-size: 24px; }
+  .jl-header-divider { margin: 0 9px; }
+  .jl-location { display: none; }
+  .jl-main { grid-template-columns: 1fr; gap: 26px; width: min(390px, 100%); margin: 42px auto 35px; }
+  .jl-intro { position: relative; padding: 5px 75px 0 0; }
+  .jl-eyebrow { gap: 8px; font-size: 6px; letter-spacing: .16em; }
+  .jl-eyebrow .jl-small-rule { width: 13px; }
+  .jl-brand { margin-top: 13px; font-size: clamp(27px, 7.6vw, 36px); letter-spacing: .1em; }
+  .jl-intro-copy { display: block; font-size: 11px; line-height: 1.8; margin-top: 7px; }
+  .jl-intro-copy span { margin-left: .3em; }
+  .jl-core { position: absolute; top: 14px; right: -6px; width: 80px; height: 80px; margin: 0; }
+  .jl-core-grid { inset: -15px; }
+  .jl-ring-ticks { inset: 4px; }
+  .jl-ring-orbit { inset: 10px; }
+  .jl-ring-inner { inset: 17px; }
+  .jl-nucleus { inset: 23px; }
+  .jl-nucleus::before { inset: 3px; }
+  .jl-nucleus-mark { font-size: 17px; transform: none; }
+  .jl-nucleus-dot { width: 2px; height: 2px; margin: 8px 0 0 1px; }
+  .jl-orbit-point { width: 2px; height: 2px; }
+  .jl-orbit-point-one { left: 9px; top: 11px; }
+  .jl-orbit-point-two { right: 4px; bottom: 18px; width: 2px; height: 2px; }
+  .jl-businesses { justify-content: flex-start; gap: 12px; font-size: 6px; letter-spacing: .15em; margin-top: 16px; }
+  .jl-business-divider { width: 12px; }
+  .jl-access { max-width: none; }
+  .jl-access-topline { padding: 16px 22px; }
+  .jl-access-content { padding: 28px 22px 26px; }
+  .jl-heading { margin-top: 16px; font-size: 28px; }
+  .jl-description { font-size: 11px; }
+  .jl-form { margin-top: 27px; }
+  .jl-input { font-size: 16px; }
+  .jl-access-footer { padding: 15px 22px; font-size: 5px; }
+  .jl-footer { gap: 14px; font-size: 6px; letter-spacing: .1em; }
+  .jl-footer-slash { margin: 0 7px; }
+}
+@media (prefers-reduced-motion: reduce) { .jl-ring-orbit, .jl-nucleus, .jl-spinner { animation: none; } }

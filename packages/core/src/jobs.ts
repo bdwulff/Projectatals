@@ -17,6 +17,7 @@ export interface EnqueueOptions {
  * without repeating external actions (section 15).
  */
 export class JobQueue {
+  private running = false;
   private handlers = new Map<string, JobHandler<any, any>>();
 
   constructor(private readonly store: Store, private readonly audit: AuditLog, private readonly backoffMs = (attempt: number) => Math.min(60_000, 1000 * 2 ** attempt)) {}
@@ -49,7 +50,22 @@ export class JobQueue {
 
   /** Process due jobs once. Returns the jobs touched. Safe to call from a scheduler tick. */
   async runOnce(limit = 20, now: Date = new Date()): Promise<StoredJob[]> {
-    const due = this.store.dueJobs(now.toISOString(), limit);
+    return this.runSelected(() => this.store.dueJobs(now.toISOString(), limit), now);
+  }
+
+  /** Process only this due job; a private preparation action cannot drain unrelated sends. */
+  async runKey(idempotencyKey: string, now: Date = new Date()): Promise<StoredJob[]> {
+    return this.runSelected(() => {
+      const job = this.store.getJobByKey(idempotencyKey);
+      return job?.status === "queued" && job.runAfter <= now.toISOString() ? [job] : [];
+    }, now);
+  }
+
+  private async runSelected(select: () => StoredJob[], now: Date): Promise<StoredJob[]> {
+    if (this.running) return [];
+    this.running = true;
+    try {
+    const due = select();
     const touched: StoredJob[] = [];
     for (const job of due) {
       const handler = this.handlers.get(job.type);
@@ -86,6 +102,7 @@ export class JobQueue {
       touched.push(job);
     }
     return touched;
+    } finally { this.running = false; }
   }
 
   /** Drain until nothing is due (used by tests and the demo). */

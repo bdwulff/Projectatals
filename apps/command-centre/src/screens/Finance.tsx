@@ -28,7 +28,7 @@ export function Finance() {
         </div>
         <RefreshButton onClick={() => void fin.refresh()} loading={fin.loading} updatedAt={fin.updatedAt} />
       </header>
-      <ErrorBanner message={fin.error} />
+      {fin.error && !f ? <Card label="Financial data" title="Waiting for verified figures."><p className="text-sm leading-relaxed text-slate-400">Jarvis couldn’t retrieve the records needed for this report. Check your business connections, then refresh this page.</p><a href="#overview" className="mt-4 inline-block text-xs text-accent-soft hover:underline">Review connections on Overview →</a></Card> : <ErrorBanner message={fin.error} />}
       {!f && !fin.error && <Loading label="Loading finance" />}
       {f && (
         <>
@@ -50,12 +50,13 @@ export function Finance() {
             {f.wulffStudio.note && <p className="mt-3 text-xs text-slate-400">{f.wulffStudio.note}</p>}
           </Card>
 
-          <Card label="Experimentation budget" title="Spend against authorised limit" className={budgetTone === "danger" ? "border-danger/40" : ""}>
+          <Card label="Experimentation budget" title="Recorded costs against authorised limit" className={budgetTone === "danger" ? "border-danger/40" : ""}>
             <div className="flex items-end justify-between gap-3">
               <div className="numeral text-3xl">{aud(f.budget.spentAud, { cents: true })} <span className="text-base text-slate-500">of {aud(f.budget.limitAud)}</span></div>
-              <div className="text-xs text-slate-400">{aud(f.budget.remainingAud, { cents: true })} remaining</div>
+              <div className="text-xs text-slate-400">{aud(f.budget.remainingAud, { cents: true })} remaining in records</div>
             </div>
             <div className="mt-3"><Bar value={f.budget.spentAud} max={f.budget.limitAud} tone={budgetTone} /></div>
+            <p className="mt-2 text-xs text-slate-400">Recorded costs only; hosting/provider billing is not connected.</p>
             <p className="mt-2 text-[11px] text-slate-500">Atlas never raises this limit on its own. Further spend needs your separate authorisation.</p>
           </Card>
         </>

@@ -1,0 +1,175 @@
+{
+  "name": "Atlas — BoxSafe daily briefing (manual, inactive)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Review template — inactive\nManual execution only. Configure your Atlas origin and n8n Header Auth credential first. Reads one fixed GET route. No schedules, webhooks, notifications, emails, calls, SQL or payments.\n\nLive use requires authorised read-only BoxSafe + Stripe sources and an authenticated private Atlas service. Fictional figures remain labelled.",
+        "height": 260,
+        "width": 480
+      },
+      "id": "atlas-notice",
+      "name": "Read before configuring",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "atlas-manual",
+      "name": "Run manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "atlas-base-url",
+              "name": "atlasBaseUrl",
+              "value": "https://atlas.example.test",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "atlas-config",
+      "name": "Owner configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $input.first().json;\nif (typeof config.atlasBaseUrl !== 'string') throw new Error('Set atlasBaseUrl in Owner configuration.');\n// Pure JavaScript: no URL global or imported module is required by the n8n sandbox.\nconst match = /^(https?):\\/\\/(localhost|127\\.0\\.0\\.1|\\[::1\\]|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*)(?::([0-9]{1,5}))?\\/?$/i.exec(config.atlasBaseUrl);\nif (!match) throw new Error('Use an Atlas origin only, without credentials, path, query or fragment.');\nconst protocol = match[1].toLowerCase();\nconst hostname = match[2].toLowerCase();\nconst port = match[3];\nif (hostname.length > 253 || (port && (Number(port) < 1 || Number(port) > 65535))) throw new Error('Invalid Atlas origin.');\nconst local = ['localhost', '127.0.0.1', '[::1]'].includes(hostname);\nif (protocol !== 'https' && !(local && protocol === 'http')) throw new Error('Use HTTPS, or HTTP loopback for local testing only.');\nif (hostname.endsWith('.example.test') || hostname === 'example.test' || hostname === 'example.com') throw new Error('Replace the example origin with your authorised Atlas origin.');\nconst origin = protocol + '://' + hostname + (port ? ':' + port : '');\nreturn [{ json: { requestUrl: origin + '/api/boxsafe/daily-briefing' } }];"
+      },
+      "id": "atlas-validate-url",
+      "name": "Validate authorised origin",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.requestUrl }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "atlas-fetch",
+      "name": "Read BoxSafe daily briefing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_IN_N8N",
+          "name": "Atlas briefing read token (configure in n8n)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nif (response.statusCode !== 200) throw new Error('Atlas briefing request did not succeed.');\nconst briefing = response.body;\nif (!briefing || !['fake', 'live'].includes(briefing.mode)) {\n  throw new Error('Briefing sources are mixed, unavailable or missing provenance.');\n}\nif (typeof briefing.spoken !== 'string' || !briefing.spoken.trim() || typeof briefing.dataNotice !== 'string' || !briefing.dataNotice.trim()) {\n  throw new Error('Atlas did not return spoken text and a data notice.');\n}\nif (briefing.mode === 'fake' && (!/fictional/i.test(briefing.spoken) || !/fictional/i.test(briefing.dataNotice))) {\n  throw new Error('Fictional figures must remain labelled in both text and speech.');\n}\nreturn [{ json: {\n  mode: briefing.mode,\n  fixture: briefing.mode === 'fake',\n  dataNotice: briefing.dataNotice,\n  spoken: briefing.spoken,\n  generatedAt: briefing.generatedAt ?? null,\n  delivery: 'Prepared only. No notification, email or call was sent.'\n} }];"
+      },
+      "id": "atlas-validate-reply",
+      "name": "Keep provenance and spoken text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Run manually": {
+      "main": [
+        [
+          {
+            "node": "Owner configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Owner configuration": {
+      "main": [
+        [
+          {
+            "node": "Validate authorised origin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate authorised origin": {
+      "main": [
+        [
+          {
+            "node": "Read BoxSafe daily briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read BoxSafe daily briefing": {
+      "main": [
+        [
+          {
+            "node": "Keep provenance and spoken text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Australia/Melbourne",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "tags": []
+}

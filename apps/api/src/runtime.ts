@@ -1,9 +1,15 @@
 /**
  * Builds an Atlas instance from environment. Adapters are live only when their
- * credentials exist; otherwise the fake adapter is used and reported as such.
+ * credentials exist; missing live connections remain unavailable, never fictional.
  * ATLAS_MODE=fake forces fakes everywhere (default for local development).
  */
-import { Atlas, SqliteStore, fake, live, type AtlasDeps, type ProspectCandidate } from "@atlas/core";
+import { AcquisitionService, Atlas, SqliteStore, fake, live, BraveResearchSource, TavilyResearchSource, type AcquisitionMailTransport, type AtlasDeps, type ProspectCandidate } from "@atlas/core";
+import { GmailAcquisitionMailTransport, ResendAcquisitionMailTransport, SelectableAcquisitionMailTransport } from "./acquisition-mail.js";
+import { OwnerUpdates } from "./owner-updates.js";
+import { OfficialBusinessEnricher } from "./acquisition-assets.js";
+import { DiscoveryProgram } from "./discovery-program.js";
+import { SiteRebuilds } from "./site-rebuilds.js";
+import { ProspectPricing } from "./prospect-pricing.js";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -29,39 +35,55 @@ export function fixtureWebsiteTable() {
   };
 }
 
-export interface Runtime { atlas: Atlas; mode: "fake" | "mixed"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
+export interface Runtime { atlas: Atlas; acquisition: AcquisitionService; acquisitionMail: AcquisitionMailTransport; mailProviders: SelectableAcquisitionMailTransport; googleMail: GmailAcquisitionMailTransport; ownerUpdates: OwnerUpdates; discoveryProgram: DiscoveryProgram; siteRebuilds: SiteRebuilds; prospectPricing: ProspectPricing; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
 
 export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
-  const forceFake = (env.ATLAS_MODE ?? "fake") === "fake";
+  const requestedMode = env.ATLAS_MODE ?? "fake";
+  if (!["fake", "live"].includes(requestedMode)) throw new Error("ATLAS_MODE must be fake or live");
+  const forceFake = requestedMode === "fake";
   const dbPath = env.ATLAS_DB_PATH ?? ":memory:";
   if (dbPath !== ":memory:") mkdirSync(dirname(dbPath), { recursive: true });
   const store = new SqliteStore(dbPath);
   const fakes = { mailer: new fake.FakeMailer(), mailbox: new fake.FakeMailbox(), telephony: new fake.FakeTelephony(), push: new fake.FakePushNotifier() };
-  const liveBoxsafe = new live.SupabaseBoxSafeGateway({ url: env.BOXSAFE_SUPABASE_URL, key: env.BOXSAFE_SUPABASE_READ_KEY });
+  const liveBoxsafe = new live.SupabaseBoxSafeGateway({ url: env.BOXSAFE_SUPABASE_URL, key: env.BOXSAFE_READ_SCOPE_VERIFIED === "true" ? env.BOXSAFE_SUPABASE_READ_KEY : undefined });
   const liveStripe = new live.StripeRestGateway(env.STRIPE_RESTRICTED_KEY);
   const liveMailer = new live.ResendMailer(env.RESEND_API_KEY, (env.ATLAS_ALLOWED_FROM ?? "").split(",").filter(Boolean));
-  const liveTel = new live.TwilioTelephony({ sid: env.TWILIO_ACCOUNT_SID, token: env.TWILIO_AUTH_TOKEN, from: env.TWILIO_FROM_NUMBER, ownerNumber: env.ATLAS_OWNER_PHONE });
-  const useLive = (has: boolean) => !forceFake && has;
+  const liveTel = new live.VerifiedTwilioTelephony({ sid: env.TWILIO_ACCOUNT_SID, token: env.TWILIO_AUTH_TOKEN, from: env.TWILIO_FROM_NUMBER, ownerNumber: env.ATLAS_OWNER_PHONE, enabled: env.ATLAS_OWNER_CALLS_ENABLED === "true", store, maxCallsPerDay: Number(env.ATLAS_OWNER_CALLS_PER_DAY ?? 1) });
+  const useBrave = env.ATLAS_RESEARCH_PROVIDER === "brave" || (env.ATLAS_RESEARCH_PROVIDER !== "tavily" && Boolean(env.BRAVE_SEARCH_API_KEY?.trim()));
+  const research = useBrave ? new BraveResearchSource({ apiKey: env.BRAVE_SEARCH_API_KEY }) : new TavilyResearchSource({ apiKey: env.TAVILY_API_KEY, excludeDomains: () => store.listDocs<{ website: string | null }>("prospects").flatMap(row => { try { return row.doc.website ? [new URL(row.doc.website).hostname] : []; } catch { return []; } }) });
   const deps: AtlasDeps = {
     store,
-    mailer: useLive(Boolean(env.RESEND_API_KEY)) ? liveMailer : fakes.mailer,
-    mailbox: fakes.mailbox,
-    telephony: useLive(Boolean(env.TWILIO_ACCOUNT_SID)) ? liveTel : fakes.telephony,
-    boxsafe: useLive(Boolean(env.BOXSAFE_SUPABASE_URL && env.BOXSAFE_SUPABASE_READ_KEY)) ? liveBoxsafe : new fake.FakeBoxSafeGateway(),
-    stripe: useLive(Boolean(env.STRIPE_RESTRICTED_KEY)) ? liveStripe : new fake.FakeStripeGateway(),
+    mailer: forceFake ? fakes.mailer : liveMailer,
+    mailbox: forceFake ? fakes.mailbox : undefined,
+    telephony: forceFake ? fakes.telephony : liveTel,
+    boxsafe: forceFake ? new fake.FakeBoxSafeGateway() : liveBoxsafe,
+    stripe: forceFake ? new fake.FakeStripeGateway() : liveStripe,
     websiteChecker: forceFake ? new fake.FakeWebsiteChecker(fixtureWebsiteTable()) : new live.HttpWebsiteChecker(),
-    speech: new fake.FakeSpeech(),
-    pushNotifier: fakes.push,
-    research: { find: async ({ count }) => fixtureCandidates().slice(0, count) },
+    speech: forceFake ? new fake.FakeSpeech() : undefined,
+    pushNotifier: forceFake ? fakes.push : new live.NtfyOwnerNotifier({ baseUrl: env.NTFY_BASE_URL, allowedHost: env.NTFY_ALLOWED_HOST, topic: env.NTFY_OWNER_TOPIC, token: env.NTFY_ACCESS_TOKEN, enabled: env.ATLAS_OWNER_PUSH_ENABLED === "true", store }),
+    research: forceFake ? { find: async ({ count }) => fixtureCandidates().slice(0, count) } : research,
+    lookup: forceFake ? undefined : research,
     config: {
       ownerName: env.ATLAS_OWNER_NAME ?? "Brandon",
       ownerEmail: env.ATLAS_OWNER_EMAIL ?? "owner@example.test",
       ownerPhone: env.ATLAS_OWNER_PHONE ?? null,
       businessFromAddress: env.ATLAS_FROM_ADDRESS ?? "hello@wulffstudio.example.test",
       budgetLimitAud: Number(env.ATLAS_BUDGET_LIMIT_AUD ?? 300),
+      ownerCallsEnabled: env.ATLAS_OWNER_CALLS_ENABLED === "true",
       gstRegistered: env.ATLAS_GST_REGISTERED === "true",
     },
   };
-  const mixed = [deps.mailer, deps.telephony, deps.boxsafe, deps.stripe].some((a) => a === liveMailer || a === liveTel || a === liveBoxsafe || a === liveStripe);
-  return { atlas: new Atlas(deps), mode: mixed ? "mixed" : "fake", fakes };
+  const atlas = new Atlas(deps);
+  const googleMail = new GmailAcquisitionMailTransport({ enabled: !forceFake, clientId: forceFake ? undefined : env.GOOGLE_CLIENT_ID, clientSecret: forceFake ? undefined : env.GOOGLE_CLIENT_SECRET, publicOrigin: env.ATLAS_PUBLIC_ORIGIN, ownerAccessKey: env.ATLAS_OWNER_ACCESS_KEY, store });
+  const fictionalMailer: AcquisitionMailTransport = { status: async () => ({ state: "fake", provider: "Fictional mailer", detail: "Fictional mode records test emails locally; no provider is contacted.", sender: "hello@wulffstudio.example.test" }), send: input => fakes.mailer.send(input) };
+  const mailProviders = new SelectableAcquisitionMailTransport({ store, defaultProvider: env.ATLAS_OUTREACH_PROVIDER, transports: { gmail: forceFake ? fictionalMailer : googleMail, resend: forceFake ? fictionalMailer : new ResendAcquisitionMailTransport({ apiKey: env.RESEND_API_KEY, fromAddress: env.ATLAS_OUTREACH_FROM, store }) } });
+  const acquisitionMail = forceFake ? fictionalMailer : mailProviders;
+  const acquisition = new AcquisitionService(atlas, { mode: forceFake ? "fake" : "live", publicOrigin: env.ATLAS_PUBLIC_ORIGIN, mailer: acquisitionMail, mailProviderIdentity: () => forceFake ? "fictional" : mailProviders.selected() === "gmail" ? googleMail.identity() : mailProviders.selected() ?? "invalid", enricher: forceFake ? undefined : new OfficialBusinessEnricher(), fromAddress: env.ATLAS_OUTREACH_FROM ?? "", senderName: env.ATLAS_OUTREACH_SENDER_NAME ?? "Brandon Wulff", organisation: "Wulff Studio", contactDetails: env.ATLAS_OUTREACH_CONTACT, maxSendsPerDay: 5 });
+  const ownerUpdates = new OwnerUpdates({ atlas, mode: forceFake ? "fake" : "live", mailer: acquisitionMail, publicOrigin: env.ATLAS_PUBLIC_ORIGIN, ownerAccessKey: env.ATLAS_OWNER_ACCESS_KEY, telegramToken: forceFake ? undefined : env.TELEGRAM_BOT_TOKEN, telegramChatId: forceFake ? undefined : env.TELEGRAM_OWNER_CHAT_ID, counts: async () => { const snapshot = await acquisition.snapshot(); return { candidates: snapshot.records.length, concepts: snapshot.records.filter(r => r.demo).length, pendingReview: snapshot.records.filter(r => r.draft && ["draft", "blocked", "awaiting_approval"].includes(r.draft.status)).length }; } });
+  for (const notifier of ownerUpdates.notifiers()) atlas.notifications.use(notifier);
+  const prospectPricing = new ProspectPricing({ atlas, mode: forceFake ? "fake" : "live", publicOrigin: env.ATLAS_PUBLIC_ORIGIN });
+  prospectPricing.sync();
+  const discoveryProgram = new DiscoveryProgram({ atlas, acquisition, mode: forceFake ? "fake" : "live", env, onPrepared: () => prospectPricing.sync() });
+  const siteRebuilds = new SiteRebuilds({ atlas, acquisition, mode: forceFake ? "fake" : "live", notificationPriority: "action_needed" });
+  return { atlas, acquisition, acquisitionMail, mailProviders, googleMail, ownerUpdates, discoveryProgram, siteRebuilds, prospectPricing, mode: forceFake ? "fake" : "live", fakes };
 }

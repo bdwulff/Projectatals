@@ -76,7 +76,7 @@ export function composeBriefing(i: BriefingInput): Briefing {
       { heading: "Recommendations", lines: recommend.length ? recommend : ["No recommendations right now."] },
       { heading: "Needs your approval", lines: needsApproval },
       { heading: "What happens next", lines: next },
-      { heading: "Budget", lines: [`A$${i.budget.spentAud.toFixed(2)} spent of the A$${i.budget.limitAud} authorised experimentation limit.`] },
+      { heading: "Budget", lines: [`A$${i.budget.spentAud.toFixed(2)} in recorded costs against the A$${i.budget.limitAud} authorised experimentation limit.`, "Recorded costs only; hosting/provider billing is not connected."] },
     ],
     structure: { happened, completed, recommend, needsApproval, next },
     dataNotice: i.boxsafeMode === "live" ? "BoxSafe figures are from the live connection." : i.boxsafeMode === "fake" ? "BoxSafe figures are FICTIONAL test data; no live connection." : "BoxSafe data unavailable.",

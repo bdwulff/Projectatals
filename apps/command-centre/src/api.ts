@@ -9,9 +9,31 @@ export interface ConnectionStatus {
   mode: "live" | "fake";
 }
 export interface Status {
-  atlas: { online: boolean; version: string; time: string; mode: "fake" | "mixed"; timezone: string };
+  atlas: { online: boolean; version: string; time: string; mode: "fake" | "live" | "mixed"; timezone: string };
   connections: ConnectionStatus[];
+  background?: {
+    state: "running" | "completed" | "partial" | "skipped";
+    startedAt: string;
+    finishedAt?: string;
+    checks: BackgroundTaskState;
+    research: BackgroundTaskState;
+  } | null;
 }
+
+export interface BackgroundTaskState {
+  state: "completed" | "partial" | "failed" | "skipped" | "blocked" | "already_ran" | "queued" | "running";
+  detail: string;
+  candidateCount?: number;
+}
+
+export interface OwnerSession {
+  authenticated: boolean;
+  configured: boolean;
+  developmentBypass?: boolean;
+  expiresAt?: string;
+}
+
+export const SESSION_EXPIRED_EVENT = "atlas:session-expired";
 
 export interface Briefing {
   generatedAt: string;
@@ -216,6 +238,28 @@ export interface CommandResult {
   data?: unknown;
 }
 
+export type DeviceAction = "device.status" | "browser.open" | "apps.open";
+export interface PairedDevice {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastSeenAt?: string | null;
+  allowedActions: DeviceAction[];
+  revokedAt?: string | null;
+}
+export interface DeviceTask {
+  id: string;
+  deviceId: string;
+  action: DeviceAction;
+  payload: Record<string, unknown>;
+  status: "queued" | "leased" | "completed" | "failed" | "expired";
+  createdAt: string;
+  expiresAt: string;
+  result?: unknown;
+}
+export interface DeviceState { devices: PairedDevice[]; tasks: DeviceTask[] }
+export interface DevicePairing { pairCode: string; expiresAt: string }
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -228,6 +272,7 @@ const BASE = "/api";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json", Accept: "application/json", ...(init?.headers ?? {}) },
   });
   const text = await res.text();
@@ -238,6 +283,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     body = text;
   }
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith("/auth/") && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    }
     const msg =
       body && typeof body === "object" && "error" in body && typeof (body as { error: unknown }).error === "string"
         ? (body as { error: string }).error
@@ -251,7 +299,25 @@ const get = <T>(path: string) => request<T>(path);
 const post = <T>(path: string, data?: unknown) =>
   request<T>(path, { method: "POST", body: data === undefined ? undefined : JSON.stringify(data) });
 
+async function downloadMacCompanion(): Promise<Blob> {
+  const res = await fetch(`${BASE}/devices/mac-companion`, { credentials: "same-origin", headers: { Accept: "application/zip" } });
+  if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    let message = `Companion download unavailable (HTTP ${res.status}).`;
+    try { const body: unknown = await res.json(); if (body && typeof body === "object" && "error" in body && typeof body.error === "string") message = body.error; } catch { /* Preserve the bounded fallback, not arbitrary response text. */ }
+    throw new ApiError(res.status, message);
+  }
+  const contentType = res.headers.get("content-type")?.split(";", 1)[0]?.trim();
+  if (contentType !== "application/zip" && contentType !== "application/octet-stream") throw new ApiError(502, "The server did not return a companion ZIP. Try again after the download is available.");
+  const blob = await res.blob();
+  if (!blob.size || blob.size > 20 * 1024 * 1024) throw new ApiError(502, "The companion download had an unexpected size.");
+  return blob;
+}
+
 export const api = {
+  session: () => get<OwnerSession>("/auth/session"),
+  login: (accessKey: string) => post<OwnerSession>("/auth/login", { accessKey }),
+  logout: () => post<{ authenticated: false }>("/auth/logout", {}),
   status: () => get<Status>("/status"),
   briefing: () => get<Briefing>("/briefing"),
   alerts: (all = false) => get<Notification[]>(`/alerts${all ? "?all=1" : ""}`),
@@ -269,6 +335,12 @@ export const api = {
   jobs: () => get<Job[]>("/jobs"),
   audit: (limit = 50) => get<AuditEntry[]>(`/audit?limit=${limit}`),
   command: (text: string) => post<CommandResult>("/command", { text }),
+  devices: () => get<DeviceState>("/devices"),
+  downloadMacCompanion,
+  pairDevice: (deviceName: string, allowedActions: DeviceAction[]) => post<DevicePairing>("/devices/pairing", { deviceName, allowedActions }),
+  deviceTask: (deviceId: string, action: DeviceAction, payload: Record<string, unknown>, requestId: string) =>
+    post<{ task: DeviceTask }>(`/devices/${encodeURIComponent(deviceId)}/tasks`, { action, payload, requestId }),
+  revokeDevice: (deviceId: string) => request<unknown>(`/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE", body: "{}" }),
   runChecks: () => post<{ ran: string[]; notifications: number }>("/run-checks"),
   seed: () => post<unknown>("/dev/seed"),
 };

@@ -1,0 +1,17 @@
+{
+  "name": "@atlas/local-agent",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "node --check src/server.mjs && node --check src/agent.mjs && node --check src/cloud-link.mjs && node --check src/journal.mjs",
+    "typecheck": "node --check src/server.mjs && node --check src/agent.mjs && node --check src/cloud-link.mjs && node --check src/journal.mjs",
+    "test": "node --test --test-isolation=none test/*.test.mjs",
+    "setup": "node src/server.mjs setup",
+    "start": "node src/server.mjs start",
+    "configure": "node src/server.mjs configure"
+  }
+}

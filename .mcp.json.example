@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "boxsafe-fixture": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["apps/boxsafe-mcp/dist/server.js"],
+      "env": {
+        "ATLAS_MODE": "fake"
+      }
+    }
+  }
+}
