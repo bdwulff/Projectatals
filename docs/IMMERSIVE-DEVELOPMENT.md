@@ -1,9 +1,11 @@
 # Business-specific immersive demos and owner review
 
-Status: 28 October 2026. Implementation is present; full workspace, browser and
-hosted release checks are **pending**. The preceding verified release remains in
-[DEPLOYMENT.md](DEPLOYMENT.md). This document does not establish a new deployment
-or completed live batch.
+Status: 28 October 2026. Railway deployment
+`c2e6861a-691b-4bc5-a9eb-6e1737b69f34` reached **SUCCESS**. The production build,
+508 workspace tests, 536 browser/export checks and 115 hosted checks passed.
+Six qualified research prospects were imported and all six eligible businesses
+received private immersive demos and matching source ZIPs. Full evidence is in
+[DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Owner workflow
 
@@ -35,10 +37,12 @@ precedence over a blank field; ambiguous or invalid URLs are excluded. Eligible
 wording is **No own website recorded** or **Only social/directory links recorded**,
 with its source and uncertainty. Category pages and job-board titles are excluded.
 
-Bounded new research produced a qualified replacement shortlist from
-business-specific public records and exact-name/locality searches. Those private
-records stay outside this public repository and can be imported for review. This
-is new research, not a claim that the old genuine prospects lacked websites.
+Bounded new research produced six qualified replacement prospects from
+business-specific public records and exact-name/locality searches. They were
+imported privately into Jarvis and all six eligible records were rebuilt. Their
+private details stay outside this public repository. Three old category, jobs or
+recruitment entries were archived with audit records retained. This is new
+research, not a claim that the old genuine prospects lacked websites.
 Social and booking pages may already serve a business effectively; a working
 booking journey is not labelled broken.
 
@@ -67,6 +71,10 @@ and an explicitly conceptual wordmark treatment. These are labelled as concept
 artwork, never represented as a verified logo, premises photograph or example of
 the business's work. Unverified addresses, hours, prices, reviews and service
 claims are not invented.
+
+The verified live batch imported one linked public business photograph. Two
+unlinked photographs were refused with HTTP409, leaving that concept's labelled
+original artwork in place. No invented business logo or photograph was used.
 
 Navigation anchors and native `details`/`summary` controls work with keyboard and
 touch. CSS motion respects reduced-motion preferences. Protected previews keep
@@ -125,9 +133,13 @@ Completion creates one deduplicated Jarvis notification with the ready
 potential-client list and private review path. Counts distinguish ready, skipped
 and failed work; an empty list does not claim confirmed website absence. Existing
 enabled external channels may report their own outcomes, but the latest
-pre-release check showed owner email and Telegram unconnected and disabled.
+hosted release check showed owner email and Telegram unconnected and disabled.
 The notification is therefore an in-Jarvis alert, not evidence that an SMS,
 telephone call or external message was delivered.
+
+The live batch's stored notification was read back successfully: its title
+reports six potential-client demos ready, and its body contains all six names
+and the private review-list link. That verifies a dashboard notification only.
 
 Spoken updates choose the newest finished daily or rebuild report. They use an
 installed device voice, share actual-speech-start deduplication with manual report
@@ -138,9 +150,22 @@ triggered. Physical playback on the owner's devices still needs verification.
 
 ## Validation and release evidence
 
-Full workspace tests, final production build, responsive interaction checks,
-source-project compilation, hosted batch execution and notification read-back
-are **pending for this release**. Focused checks and final counts belong in
-[DEPLOYMENT.md](DEPLOYMENT.md) after they complete. Fictional browser fixtures are
-not live potential-client results, and a stored notification is not confirmed
-external delivery.
+Validation passed: 508 workspace tests (206 core, 260 API, seven MCP, 24
+local-agent and eleven UI), the production build, and 536 browser/export checks
+(426 renderer/export and 110 review UI). Four generated React projects passed
+production builds and matched their protected previews.
+
+All 115 hosted checks passed after importing the six research records. The batch
+created six unique design IDs across four families; every matching eight-file ZIP
+passed CRC and credential/private-publication-token exclusion checks. Previews
+kept scripts disabled and sourced service facts intact. Authentication, logout,
+repeated-request idempotency and the owner notification's exact list/review path
+were verified. No client email, public concept publication, Lovable generation,
+model call or paid voice request occurred. The enabled daily program now uses
+`immersive`, preserving its three-candidate count and existing search scope.
+
+Live evidence is recorded in [DEPLOYMENT.md](DEPLOYMENT.md); the private report
+at `/workspace/scratch/immersive-live-verification.json` remains outside this
+repository. Fictional browser fixtures are not live prospect results, a stored
+notification is not confirmed external delivery, and physical playback on the
+owner's device remains unverified.

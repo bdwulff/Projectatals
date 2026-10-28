@@ -1,10 +1,45 @@
 # Jarvis hosted deployment
 
-> **Immersive rebuild release pending:** business-specific immersive directions,
-> matching React source ZIPs, the all-eligible private rebuild batch and owner
-> review-list notification are implemented. Full workspace, browser and hosted
-> release verification are **pending**. No new live completion is claimed here.
-> See [IMMERSIVE-DEVELOPMENT.md](IMMERSIVE-DEVELOPMENT.md).
+> **Immersive rebuild deployed:** Railway deployment
+> `c2e6861a-691b-4bc5-a9eb-6e1737b69f34` reached **SUCCESS** on 28 October 2026.
+> All 508 workspace tests, the production build, 536 browser/export checks and
+> 115 hosted checks passed. Six qualified research prospects were imported and
+> all six eligible businesses received private immersive demos with matching
+> editable source. See [IMMERSIVE-DEVELOPMENT.md](IMMERSIVE-DEVELOPMENT.md).
+
+The real batch produced six unique design IDs across all four industry-led
+families. All six source ZIPs contained eight files and passed CRC validation,
+credential/publication-token exclusion and matching design checks. Protected
+previews kept scripts disabled through their CSP and retained sourced service
+facts. A repeated request preserved the same batch ID and completion time;
+owner authentication and logout protected the private reports and downloads.
+
+One verified public business photograph was imported. Two unlinked photographs
+were refused with HTTP409; that concept retained labelled original artwork.
+No business logo or photograph was invented. Three old category, jobs or
+recruitment entries were archived, with their audit records retained. The old
+genuine prospects mostly already had websites; the six new candidates remain
+qualified as having no independent website found in bounded checks, not proven
+website absence or confirmed customers.
+
+Jarvis recorded an owner notification whose title reports six potential-client
+demos ready and whose body contains all six names and the private review link.
+Read-back verified this persisted dashboard notification. Owner email and
+Telegram were **not connected**, so no external delivery is claimed. No client
+email, public concept publication, Lovable generation, model call or paid voice
+request was made during this verification.
+
+The enabled daily program now uses `immersive`, retaining its three-candidate
+count and existing south-east Melbourne scope. Spoken updates use an installed
+voice with the app in the foreground after **Enable spoken updates**. No playback
+through the owner's physical speaker has been verified. Existing Railway charges
+and keyless-provider limits remain.
+
+Current validation: 206 core, 260 API, seven MCP, 24 local-agent and eleven UI unit
+tests; 426 renderer/export and 110 review-UI checks. Four generated React projects
+also passed production builds and matched their protected previews. The private
+115-check hosted report remains outside the repository at
+`/workspace/scratch/immersive-live-verification.json`.
 
 The preceding verified discovery release is recorded below.
 
@@ -40,7 +75,7 @@ The company domain is owner-provided identity metadata; no DNS or company-site
 publication was performed by this release. Keyless search limits and existing
 Railway charges still apply.
 
-Current validation: 185 core, 227 API, seven MCP, 24 local-agent and eleven UI unit
+Previous discovery validation: 185 core, 227 API, seven MCP, 24 local-agent and eleven UI unit
 tests; 74 program UI, 45 report-voice and 46 Clarity browser checks. A generated
 React project also passed a real TypeScript check and Vite production build.
 The private hosted verification report is kept outside the repository at
