@@ -1,6 +1,6 @@
 import { ApiError, SESSION_EXPIRED_EVENT } from "./api";
 
-export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity";
+export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity" | "immersive";
 export interface AcquisitionTemplate {
   id: DemoTemplateId;
   name: string;
@@ -27,6 +27,7 @@ export interface AcquisitionContact {
 export interface AcquisitionDemo {
   id: string; templateId: DemoTemplateId; templateName: string; htmlHash: string; previewPath: string;
   publicPath: string | null; publishedAt?: string; expiresAt: string;
+  designBrief?: { id: string; family: "automotive" | "craft" | "movement" | "editorial"; direction: string; palette: { background: string; foreground: string; accent: string; muted: string }; layout: string; typography: string; headline: string; signature: string; sections: string[] };
 }
 export type OutreachStatus = "draft" | "blocked" | "awaiting_approval" | "queued" | "submitting" | "accepted" | "failed" | "uncertain" | "cancelled" | "simulated";
 export interface AcquisitionDraft {
@@ -39,6 +40,7 @@ export interface AcquisitionBusinessImage {
 }
 export interface AcquisitionBusinessProfile {
   state: "ready" | "partial" | "unavailable" | "fictional"; detail: string; sourceUrl: string; fetchedAt: string;
+  sourceKind?: "public_research" | "website_fetch";
   description?: string; address?: string; phone?: string; services: string[]; notices: string[];
   logo?: AcquisitionBusinessImage; images: AcquisitionBusinessImage[];
 }

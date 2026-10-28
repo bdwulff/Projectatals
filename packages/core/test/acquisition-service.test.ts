@@ -29,6 +29,28 @@ function rawDemo(record: AcquisitionRecord): string { return /\/demos\/([A-Za-z0
 function rawUnsub(record: AcquisitionRecord): string { return /\/unsubscribe\/([A-Za-z0-9_-]+)/.exec(record.draft!.text)![1]!; }
 
 describe("client acquisition domain", () => {
+  it("uses cited business facts for a no-website concept without inventing an official site or artwork", () => {
+    const { service, send } = setup();
+    const record = service.addLead({ businessName: "Garden craft (fictional)", location: "Berwick, Victoria", industry: "Garden maintenance", website: null, sourceUrl: "https://directory.example.com/garden-craft", observation: "Fictional directory research; an independent website was not found in these checks.", services: ["Hedge trimming", "Garden clean-ups"], description: "Source description with <script>untrusted markup</script>", address: "1 Fictional Avenue, Berwick", phone: "(03) 0000 0000" });
+    const prepared = service.prepare(record.id, { templateId: "immersive" });
+    const html = service.ownerPreview(prepared.demo!.id)!.html;
+    expect(prepared.website).toBeNull();
+    expect(prepared.businessProfile?.sourceUrl).toBe("https://directory.example.com/garden-craft");
+    expect(prepared.businessProfile?.logo).toBeUndefined();
+    expect(prepared.businessProfile?.images).toEqual([]);
+    expect(html).toContain("1 Fictional Avenue"); expect(html).toContain("Hedge trimming");
+    expect(html).not.toContain("<script>untrusted markup</script>");
+    expect(prepared.demo?.designBrief?.family).toBe("craft");
+    expect(service.publicPreview(rawDemo(prepared))).toBeNull();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("refuses malformed public contact facts before creating any prospect", () => {
+    const { service, atlas } = setup();
+    expect(() => service.addLead({ businessName: "Invalid facts (fictional)", location: "Berwick", industry: "Trade", sourceUrl: "https://directory.example.com/company", observation: "Fictional test", phone: "0412 345 678; bcc: victim@example.com" })).toThrow();
+    expect(atlas.prospects.list()).toEqual([]);
+  });
+
   it("updates the trusted company identity without changing the email account or erasing owner edits", async () => {
     const { service, send } = setup();
     const original = service.prepare(add(service).id);
@@ -116,7 +138,7 @@ describe("client acquisition domain", () => {
     service.saveDraft(lead.id,{expectedHash:lead.draft!.contentHash,subject:"Owner edited while source was loading",text:lead.draft!.text+"\nAn owner-written fictional note."});
     finish({state:"partial",detail:"Fictional",sourceUrl:lead.website!,fetchedAt:"2026-10-26T05:00:00Z",address:"Stale fictional address",services:[],images:[],notices:[]});
     await expect(pending).rejects.toThrow(/changed while/);
-    expect((await service.snapshot()).records[0]?.businessProfile).toBeUndefined();
+    expect((await service.snapshot()).records[0]?.businessProfile).toEqual(lead.businessProfile);
   });
 
   it("binds mail provider selection to a new exact version while preserving the edited email", async () => {

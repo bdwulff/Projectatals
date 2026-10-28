@@ -1,5 +1,13 @@
 # Jarvis hosted deployment
 
+> **Immersive rebuild release pending:** business-specific immersive directions,
+> matching React source ZIPs, the all-eligible private rebuild batch and owner
+> review-list notification are implemented. Full workspace, browser and hosted
+> release verification are **pending**. No new live completion is claimed here.
+> See [IMMERSIVE-DEVELOPMENT.md](IMMERSIVE-DEVELOPMENT.md).
+
+The preceding verified discovery release is recorded below.
+
 > **Discovery program deployed:** Railway deployment
 > `2fcae55f-49e1-45af-a533-34beee3ad1e8` reached **SUCCESS** on 27 October 2026.
 > All 454 workspace tests, the production build, 165 browser checks and 51 hosted

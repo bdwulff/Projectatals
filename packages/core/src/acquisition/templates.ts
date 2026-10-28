@@ -1,5 +1,5 @@
 /** Curated, free commercial-use design references. No upstream template code or assets are embedded. */
-export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity";
+export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity" | "immersive";
 
 export interface DemoTemplate {
   readonly id: DemoTemplateId;
@@ -31,6 +31,12 @@ const source = (name: string, sourceUrl: string, licenceUrl: string) => Object.f
 });
 
 export const DEMO_TEMPLATES: readonly DemoTemplate[] = Object.freeze([
+  Object.freeze({
+    id: "immersive", name: "Immersive", category: "professional", implementation: "original_wulff_studio",
+    description: "A business-specific art direction with four distinct design families, identity-led composition, sculptural artwork, sourced photography and working native exploration controls.",
+    inspiration: source("Landwind", "https://github.com/themesberg/landwind", "https://github.com/themesberg/landwind/blob/main/LICENSE"),
+    attribution: "Original business-specific design, illustration and implementation by Wulff Digital. No upstream template code or assets embedded; business assets retain their recorded source provenance.",
+  }),
   Object.freeze({
     id: "clarity", name: "Clarity", category: "professional", implementation: "original_wulff_studio",
     description: "Apple-inspired visual restraint: generous white space, quiet system typography, large business photography and focused service cards. Original code; no Apple code or assets reused.",

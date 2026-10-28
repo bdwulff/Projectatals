@@ -10,6 +10,8 @@ export interface BusinessImage {
 }
 
 export interface BusinessProfile {
+  /** Recorded research facts do not establish that the official website has been fetched. */
+  sourceKind?: "public_research" | "website_fetch";
   state: "ready" | "partial" | "unavailable" | "fictional";
   detail: string;
   sourceUrl: string;

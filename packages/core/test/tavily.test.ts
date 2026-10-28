@@ -73,4 +73,35 @@ describe("bounded Tavily discovery", () => {
     expect(leads.map(lead => lead.businessName)).toEqual(["Fieldwork Fencing"]);
     expect(leads[0]?.observations[0]?.status).toBe("unverified");
   });
+
+  it("rejects actual directory, job-board and business-sale result shapes while retaining a named official business", async () => {
+    const rows = [
+      { title: "Fencing Contractors in Pakenham", url: "https://www.whereis.com/vic/pakenham-3810/yellowId-123", content: "Find fencing contractors in Pakenham." },
+      { title: "Fitness Jobs in Pakenham VIC", url: "https://www.seek.com/fitness-jobs/in-Pakenham-VIC-3810", content: "Fencing and fitness jobs in Pakenham." },
+      { title: "Fencing Businesses for Sale in Pakenham", url: "https://www.anybusiness.com.au/business-for-sale/vic/pakenham", content: "Pakenham fencing business listings for sale." },
+      { title: "Victoria Government Gazette", url: "https://www.gazette.vic.gov.au/gazette/Gazettes2026/GG2026G034.pdf", content: "Pakenham fencing contractors and fitness." },
+      { title: "Top 10 Fencing Contractors Pakenham", url: "https://generic-listing.example.com/pakenham", content: "Pakenham fencing services compared." },
+      { title: "Fence Installer Positions in Pakenham", url: "https://vacancies.example.com/jobs/pakenham", content: "Fencing role in Pakenham." },
+      { title: "Named Fencing Company | Pakenham", url: "https://named-fencing.example.com/careers/installer", content: "Fencing in Pakenham, hiring installers." },
+      { title: "Fieldwork Fencing | Pakenham", url: "https://fieldwork-fencing.example.com/", content: "Independent fencing and timber gates in Pakenham." },
+      { title: "Best Fence Craft | Pakenham", url: "https://best-fence-craft.example.com/", content: "Named independent fencing business in Pakenham." },
+    ];
+    const request = vi.fn(async () => new Response(JSON.stringify({ results: rows })));
+    const source = new TavilyResearchSource({ fetch: request });
+    const leads = await source.find({ area: "Pakenham, Victoria", count: 5, industries: ["Fencing"] });
+    expect(leads.map(lead => lead.businessName)).toEqual(["Fieldwork Fencing", "Best Fence Craft"]);
+    const excluded = JSON.parse((request.mock.calls[0]?.[1] as RequestInit).body as string).exclude_domains;
+    expect(excluded).toEqual(expect.arrayContaining(["whereis.com", "seek.com", "anybusiness.com.au"]));
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(leads.every(lead => lead.observations.every(item => item.status === "unverified"))).toBe(true);
+  });
+
+  it("keeps category and vacancy sources available as untrusted evidence in an explicit lookup", async () => {
+    const request = vi.fn(async () => new Response(JSON.stringify({ results: [{ title: "Fitness Jobs in Pakenham", url: "https://www.seek.com/fitness-jobs/in-Pakenham", content: "Public job results, not a client." }] })));
+    const source = new TavilyResearchSource({ fetch: request });
+    const results = await source.lookup({ query: "check this Pakenham job-board source", count: 1 });
+    expect(results).toHaveLength(1); expect(results[0]?.trust).toBe("untrusted_web_content");
+    expect(JSON.parse((request.mock.calls[0]?.[1] as RequestInit).body as string).exclude_domains).toBeUndefined();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
 });

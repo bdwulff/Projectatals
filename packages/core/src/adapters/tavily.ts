@@ -5,8 +5,16 @@ import { ResearchUnavailableError, type ResearchLookupInput, type ResearchLookup
 import { isPublicAddress } from "./live/website-checker.js";
 
 const ENDPOINT = "https://api.tavily.com/search";
-const EXCLUDED_HOSTS = ["facebook.com", "instagram.com", "linkedin.com", "youtube.com", "mapquest.com", "yellowpages.com.au", "truelocal.com.au", "yelp.com", "wikipedia.org", "hipages.com.au", "oneflare.com.au", "canstar.com.au", "dindi.com.au", "seek.com.au", "indeed.com", "localsearch.com.au", "australia247.info", "tripadvisor.com.au", "mindbodyonline.com", "classpass.com", "keepactive.com.au", "crossfit.com", "snapfitness.com", "anytimefitness.com", "bodyfittraining.com", "fitnessfirst.com.au", "goodlife.com.au", "jetts.com.au"];
+const EXCLUDED_HOSTS = ["facebook.com", "instagram.com", "linkedin.com", "youtube.com", "mapquest.com", "yellowpages.com.au", "truelocal.com.au", "yelp.com", "wikipedia.org", "hipages.com.au", "oneflare.com.au", "canstar.com.au", "dindi.com.au", "whereis.com", "seek.com", "seek.com.au", "indeed.com", "jora.com", "adzuna.com.au", "careerone.com.au", "fitnessjobs.com.au", "anybusiness.com.au", "businessesforsale.com", "businessesforsale.com.au", "businessforsale.com.au", "bsale.com.au", "australianbusinessforsale.com.au", "commercialrealestate.com.au", "localsearch.com.au", "australia247.info", "tripadvisor.com.au", "mindbodyonline.com", "classpass.com", "keepactive.com.au", "crossfit.com", "snapfitness.com", "anytimefitness.com", "bodyfittraining.com", "fitnessfirst.com.au", "goodlife.com.au", "jetts.com.au"];
 const DIRECTORY_HOSTS = new RegExp(`(^|\\.)(${EXCLUDED_HOSTS.map(host => host.replace(/\./g, "\\.")).join("|")})$`, "i");
+/** A category, vacancy or sale advert is not a named potential client, even when local keywords match. */
+function nonBusinessResult(title: string, pathname: string): boolean {
+  return /\b(?:gazette|newspaper|local paper|government|directory|compare providers|business(?:es)? for sale|job vacancies|job openings|job search|positions vacant|employment opportunities|search results)\b/i.test(title)
+    || /\b(?:jobs?|vacancies|positions|contractors|companies|businesses|gyms|plumbers|electricians)\s+(?:in|near|around)\b/i.test(title)
+    || /\b(?:top|best)\s+\d+\b|^\d+\s+(?:best|top)\b/i.test(title)
+    || /^(?:find\s+(?:(?:local|nearby|the best)\s+)?(?:fencing contractors|plumbers|electricians|gyms|fitness jobs|businesses)|list of|directory of|search results)\b/i.test(title)
+    || /\/(?:jobs?|careers?|vacanc(?:y|ies)|employment|business(?:es)?[-_]for[-_]sale|business[-_]sales)(?:\/|$)/i.test(pathname);
+}
 const SECTORS = [
   { label: "fencing", pattern: /\bfenc\w*|\bgates?\b/i },
   { label: "plumbing", pattern: /\bplumb\w*|\bdrain\w*|\bgasfitt\w*/i },
@@ -73,7 +81,7 @@ export class TavilyResearchSource implements ResearchSource {
     const seen = new Set<string>(); const candidates: ProspectCandidate[] = [];
     for (const result of results) {
       const url = new URL(result.url);
-      if (DIRECTORY_HOSTS.test(url.hostname) || /(?:^|\.)(?:gov|edu)\.au$/i.test(url.hostname) || /\.(?:pdf|docx?|xlsx?|pptx?|zip|png|jpe?g)$/i.test(url.pathname) || /\/(?:news|blog|articles?|wp-content|gazette)\//i.test(url.pathname) || /\b(?:gazette|newspaper|local paper|government|directory|compare providers|businesses for sale)\b/i.test(result.title) || seen.has(url.hostname) || excluded.some(host => url.hostname === host || url.hostname.endsWith("." + host))) continue;
+      if (DIRECTORY_HOSTS.test(url.hostname) || /(?:^|\.)(?:gov|edu)\.au$/i.test(url.hostname) || /\.(?:pdf|docx?|xlsx?|pptx?|zip|png|jpe?g)$/i.test(url.pathname) || /\/(?:news|blog|articles?|wp-content|gazette)\//i.test(url.pathname) || nonBusinessResult(result.title, url.pathname) || seen.has(url.hostname) || excluded.some(host => url.hostname === host || url.hostname.endsWith("." + host))) continue;
       const sourceText = `${result.title} ${result.description} ${url.pathname}`.toLowerCase();
       const locality = sourceText.includes(queryLocality.toLowerCase()) ? queryLocality : null;
       if (!locality) continue;

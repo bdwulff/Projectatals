@@ -19,7 +19,7 @@ const TAB_KEY = "atlas.tab";
 
 function readTab(): Tab {
   try {
-    const h = window.location.hash.replace("#", "") as Tab;
+    const h = window.location.hash.replace("#", "").split("?")[0] as Tab;
     if (["overview", "approvals", "pipeline", "boxsafe", "finance", "devices"].includes(h)) return h;
     const s = window.localStorage.getItem(TAB_KEY) as Tab | null;
     if (s && ["overview", "approvals", "pipeline", "boxsafe", "finance", "devices"].includes(s)) return s;

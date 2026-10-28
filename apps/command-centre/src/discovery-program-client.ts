@@ -5,7 +5,7 @@ export interface DiscoveryProgramSettings {
   area: string;
   industry: string;
   count: number;
-  templateId: "clarity";
+  templateId: "clarity" | "immersive";
   companyName: string;
   companyWebsite: string;
   timeZone: "Australia/Melbourne";

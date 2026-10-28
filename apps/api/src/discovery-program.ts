@@ -5,7 +5,7 @@ import type { Runtime } from "./runtime.js";
 const SETTINGS = "discovery.program.settings", REPORTS = "discovery_program_reports", JOB = "discovery_program";
 const TERMINAL = new Set(["accepted", "submitting", "queued", "uncertain", "simulated", "cancelled"]);
 export interface DiscoverySettings {
-  enabled: boolean; area: string; industry: string; count: number; templateId: "clarity";
+  enabled: boolean; area: string; industry: string; count: number; templateId: "clarity" | "immersive";
   companyName: string; companyWebsite: string; timeZone: "Australia/Melbourne";
 }
 export interface DiscoveryReport {
@@ -52,7 +52,7 @@ export class DiscoveryProgram {
 
   isConfigured(): boolean { return this.saved() !== null; }
   settings(): DiscoverySettings {
-    return this.saved()?.settings ?? { enabled: false, area: "Officer, Berwick, Pakenham, Cranbourne, Dandenong, Victoria", industry: "", count: 3, templateId: "clarity", companyName: "Wulff Digital", companyWebsite: "https://wulffdigital.com", timeZone: "Australia/Melbourne" };
+    return this.saved()?.settings ?? { enabled: false, area: "Officer, Berwick, Pakenham, Cranbourne, Dandenong, Victoria", industry: "", count: 3, templateId: "immersive", companyName: "Wulff Digital", companyWebsite: "https://wulffdigital.com", timeZone: "Australia/Melbourne" };
   }
 
   configure(input: unknown): void {
@@ -223,7 +223,7 @@ function validateSettings(input: unknown): DiscoverySettings {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new DiscoveryProgramError("Provide the discovery program settings.");
   const value = input as Record<string, unknown>;
   const allowed = ["enabled", "area", "industry", "count", "templateId", "companyName", "companyWebsite", "timeZone"];
-  if (Object.keys(value).some(key => !allowed.includes(key)) || typeof value.enabled !== "boolean" || !Number.isInteger(value.count) || Number(value.count) < 1 || Number(value.count) > 5 || value.templateId !== "clarity" || value.timeZone !== "Australia/Melbourne") throw new DiscoveryProgramError("Use one to five private Clarity demos per Melbourne day and explicit enabled settings.");
+  if (Object.keys(value).some(key => !allowed.includes(key)) || typeof value.enabled !== "boolean" || !Number.isInteger(value.count) || Number(value.count) < 1 || Number(value.count) > 5 || !["clarity", "immersive"].includes(String(value.templateId)) || value.timeZone !== "Australia/Melbourne") throw new DiscoveryProgramError("Use one to five private Clarity or Immersive demos per Melbourne day and explicit enabled settings.");
   const text = (field: string, max: number, required = true) => {
     const text = value[field];
     if (typeof text !== "string" || /[\u0000-\u001f\u007f]/.test(text) || text.trim().length > max || (required && !text.trim())) throw new DiscoveryProgramError(`Provide valid ${field} settings.`);
@@ -233,7 +233,7 @@ function validateSettings(input: unknown): DiscoverySettings {
   let website: string | null;
   try { website = safeDemoWebsite(companyWebsite); } catch { throw new DiscoveryProgramError("Provide the company's public HTTPS website without credentials or a fragment."); }
   if (!website) throw new DiscoveryProgramError("Provide the company's public HTTPS website.");
-  return { enabled: value.enabled, area, industry, count: Number(value.count), templateId: "clarity", companyName, companyWebsite: website.replace(/\/$/, ""), timeZone: "Australia/Melbourne" };
+  return { enabled: value.enabled, area, industry, count: Number(value.count), templateId: value.templateId as "clarity" | "immersive", companyName, companyWebsite: website.replace(/\/$/, ""), timeZone: "Australia/Melbourne" };
 }
 
 /** Install behind the normal owner-session and same-origin JSON middleware. */

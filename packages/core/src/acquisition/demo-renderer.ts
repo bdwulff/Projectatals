@@ -3,6 +3,7 @@ import { isIP } from "node:net";
 import { isPublicAddress } from "../adapters/live/website-checker.js";
 import { getDemoTemplate, selectDemoTemplate, type DemoTemplate, type DemoTemplateId } from "./templates.js";
 import type { BusinessImage, BusinessProfile } from "./business-profile.js";
+import { exportImmersiveReactProject, renderImmersiveConcept, type ImmersiveDesignBrief } from "./immersive-design.js";
 
 export interface DemoBusinessInput {
   businessName: string;
@@ -31,6 +32,7 @@ export interface RenderedDemoWebsite {
   readonly contentSecurityPolicy: string;
   readonly fixture: boolean;
   readonly externalAssets: readonly string[];
+  readonly designBrief?: Readonly<ImmersiveDesignBrief>;
 }
 
 interface PreparedBusiness {
@@ -266,6 +268,15 @@ function conceptSection(b: PreparedBusiness, template: DemoTemplate): string {
 export function renderDemoWebsite(input: DemoBusinessInput): Readonly<RenderedDemoWebsite> {
   const b = prepare(input);
   const template = input.templateId === undefined ? selectDemoTemplate(b.industry) : getDemoTemplate(input.templateId);
+  if (template.id === "immersive") {
+    const rendered = renderImmersiveConcept(b);
+    const styleHash = createHash("sha256").update(rendered.css).digest("base64");
+    const policy = `default-src 'none'; script-src 'none'; style-src 'sha256-${styleHash}'; img-src data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`;
+    const html = `<!doctype html><html lang="en-AU"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="${e(policy)}"><meta name="description" content="${e(`Independent website concept for ${b.businessName} by ${b.studioName}. Not the business's official website.`)}"><title>${e(b.businessName)} — Independent Website Concept | ${e(b.studioName)}</title><style>${rendered.css}</style></head><body class="theme-immersive">${rendered.body}</body></html>`;
+    return Object.freeze({ html, templateId: template.id, templateName: template.name, template, attribution: template.attribution,
+      contentHash: createHash("sha256").update(html).digest("hex"), contentSecurityPolicy: `${policy}; frame-ancestors 'self'`, fixture: b.fixture,
+      externalAssets: Object.freeze([] as string[]), designBrief: rendered.designBrief });
+  }
   const css = baseCss + (template.id === "fieldwork" ? fieldworkCss : template.id === "momentum" ? momentumCss : template.id === "folio" ? folioCss : "") + businessAssetCss + (template.id === "clarity" ? clarityCss : "");
   const styleHash = createHash("sha256").update(css).digest("base64");
   const policy = `default-src 'none'; script-src 'none'; style-src 'sha256-${styleHash}'; img-src data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`;
@@ -294,6 +305,7 @@ function illustrationJsx(svg: string): string {
  * The protected HTML preview remains a separate script-free artefact.
  */
 export function exportDemoReactProject(input: DemoBusinessInput): Readonly<Record<string, string>> {
+  if (input.templateId === "immersive") return exportImmersiveReactProject(prepare(input));
   if (input.templateId !== undefined && input.templateId !== "clarity") throw new Error("Build a Clarity concept before downloading its matching React source.");
   const b = prepare({ ...input, templateId: "clarity" });
   const template = getDemoTemplate("clarity");

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 import { discoveryProgram, type DiscoveryProgramReport } from "../discovery-program-client";
+import { siteRebuilds, type SiteRebuildReport } from "../site-rebuilds-client";
 import { DISCOVERY_REPORT_SPOKEN_EVENT, chooseLocalReportVoice, hasSpokenDiscoveryReport, makeDiscoveryReportUtterance, markDiscoveryReportSpoken } from "../discovery-report-voice";
 import { DEVICE_VOICE_ACTIVITY_EVENT, DEVICE_VOICE_CHANGED_EVENT, deviceVoiceBusy, setDeviceVoiceActivity } from "../voice";
 import "./discovery-report-voice.css";
@@ -10,7 +11,8 @@ const ACTIVITY = "discovery-report-announcement";
 type SpeechState = "ready" | "waiting" | "starting" | "speaking" | "done" | "needs_tap" | "unavailable";
 function preferredEnabled(): boolean { try { return localStorage.getItem(ENABLED_KEY) !== "off"; } catch { return true; } }
 function pageVisible(): boolean { return document.visibilityState !== "hidden"; }
-function isFinished(report: DiscoveryProgramReport | null): report is DiscoveryProgramReport { return Boolean(report?.finishedAt && !["queued", "running"].includes(report.state)); }
+type CompletionReport = DiscoveryProgramReport | SiteRebuildReport;
+function isFinished(report: CompletionReport | null): report is CompletionReport { return Boolean(report?.finishedAt && !["queued", "running"].includes(report.state)); }
 
 /** Mounted only inside owner sign-in. It reads report metadata and uses installed speech voices. */
 export function DiscoveryReportVoice({ sessionId }: { sessionId: string }) {
@@ -18,7 +20,7 @@ export function DiscoveryReportVoice({ sessionId }: { sessionId: string }) {
   const [enabled, setEnabled] = useState(preferredEnabled);
   const [unlocked, setUnlocked] = useState(false);
   const [visible, setVisible] = useState(document.visibilityState !== "hidden");
-  const [report, setReport] = useState<DiscoveryProgramReport | null>(null);
+  const [report, setReport] = useState<CompletionReport | null>(null);
   const [state, setState] = useState<SpeechState>(supported ? "ready" : "unavailable");
   const [localVoice, setLocalVoice] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,8 +98,13 @@ export function DiscoveryReportVoice({ sessionId }: { sessionId: string }) {
       if (inFlight || document.visibilityState === "hidden") return;
       inFlight = true;
       try {
-        const snapshot = await discoveryProgram.snapshot();
-        if (live && mounted.current && pageVisible()) { setReport(snapshot.latestReport); setError(null); }
+        const [daily, rebuild] = await Promise.allSettled([discoveryProgram.snapshot(), siteRebuilds.optionalSnapshot()]);
+        const reports: CompletionReport[] = [];
+        if (daily.status === "fulfilled" && daily.value.latestReport) reports.push(daily.value.latestReport);
+        if (rebuild.status === "fulfilled" && rebuild.value?.latestReport) reports.push(rebuild.value.latestReport);
+        const finished = reports.filter(isFinished).sort((a, b) => Date.parse(b.finishedAt!) - Date.parse(a.finishedAt!));
+        if (daily.status === "rejected" && (rebuild.status === "rejected" || rebuild.value === null)) throw new Error("Private updates are unavailable.");
+        if (live && mounted.current && pageVisible()) { setReport(finished[0] ?? null); setError(null); }
       } catch { if (live && mounted.current) setError("Discovery updates are unavailable. Open Studio to check the program."); }
       finally { inFlight = false; }
     };
@@ -156,10 +163,10 @@ export function DiscoveryReportVoice({ sessionId }: { sessionId: string }) {
     : state === "waiting" ? "Your microphone or audio has priority. The report will wait."
     : !enabled ? "Automatic updates are paused on this device."
     : !unlocked ? "Enable once per visit to hear finished discovery reports while Jarvis is open."
-    : "Finished discovery reports will speak once while this app is visible.");
+    : "Finished discovery and design-review reports will speak once while this app is visible.");
 
   return <section className="discovery-report-voice" aria-label="Spoken discovery updates">
-    <div className="discovery-report-voice__body"><span className="discovery-report-voice__icon"><Volume2 size={15} aria-hidden /></span><div><strong>Discovery updates · device voice</strong><p role="status">{status}</p><small>No Lovable, AI or ElevenLabs credits for these spoken reports.</small></div></div>
+    <div className="discovery-report-voice__body"><span className="discovery-report-voice__icon"><Volume2 size={15} aria-hidden /></span><div><strong>Discovery & design updates · device voice</strong><p role="status">{status}</p><small>No Lovable, AI or ElevenLabs credits for these spoken reports.</small></div></div>
     <div className="discovery-report-voice__controls">
       {enabled && unlocked ? <button type="button" onClick={pause}><VolumeX size={13} aria-hidden />Pause spoken updates</button> : <button type="button" onClick={enable} disabled={!supported || !localVoice}><Volume2 size={13} aria-hidden />Enable spoken updates</button>}
       <button type="button" onClick={readLatest} disabled={!supported || !localVoice || !isFinished(report) || state === "starting" || state === "speaking"}>Read latest report</button>

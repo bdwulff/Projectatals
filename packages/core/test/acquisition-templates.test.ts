@@ -102,26 +102,26 @@ describe("free-template concept renderer", () => {
     expect(() => renderDemoWebsite({ ...business, templateId: "unknown" as "fieldwork" })).toThrow(/Unknown/);
   });
 
-  it("preserves industry choices and adds a distinct explicit Clarity direction", () => {
+  it("preserves industry choices and keeps every explicit design direction distinct", () => {
     expect(selectDemoTemplate("Plumbing").id).toBe("fieldwork");
     expect(selectDemoTemplate("Personal training").id).toBe("momentum");
     expect(selectDemoTemplate("Accounting").id).toBe("folio");
-    expect(new Set(DEMO_TEMPLATES.map(template => renderDemoWebsite({ ...business, templateId: template.id }).contentHash)).size).toBe(4);
+    expect(new Set(DEMO_TEMPLATES.map(template => renderDemoWebsite({ ...business, templateId: template.id }).contentHash)).size).toBe(DEMO_TEMPLATES.length);
     expect(getDemoTemplate("fieldwork").inspiration.name).toBe("ScrewFast");
   });
 
   it.each(DEMO_TEMPLATES)("$name embeds sourced branding and photos with factual details and explicit provenance", template => {
     const result = renderDemoWebsite({ ...business, templateId: template.id, businessProfile: profile() });
-    expect(result.html).toContain('class="business-logo"');
-    expect(result.html).toContain('class="business-hero-image"');
-    expect(result.html).toContain('class="business-gallery"');
+    expect(result.html).toMatch(/class="(?:business-logo|im-logo)"/);
+    expect(result.html).toMatch(/class="(?:business-hero-image|im-hero-photo)"/);
+    expect(result.html).toMatch(/class="(?:business-gallery|im-gallery im-wrap im-section)"/);
     expect((result.html.match(/<img /g) ?? []).length).toBe(4);
     expect(result.html).toContain(`src="data:image/png;base64,${png.toString("base64")}"`);
     expect(result.html).toContain("10 Sample Road, Berwick VIC 3806");
-    expect(result.html).toContain("Street address / business website");
+    expect(result.html).toMatch(/Street address \/ business website|Published address/);
     expect(result.html).toContain("The business provides fencing and gate installation in Berwick.");
-    expect(result.html).toContain("Business information source ↗");
-    expect(result.html).toContain("Usage rights require confirmation.");
+    expect(result.html).toMatch(/Business information source ↗|Recorded business information source ↗/);
+    expect(result.html).toMatch(/Usage rights require confirmation\.|usage rights need confirmation/);
     expect(result.html).toContain("Their inclusion does not establish ownership, permission or endorsement");
     expect(result.html).toContain('href="https://business.com/images/official-photo.png"');
     expect(result.html).not.toContain("tracking=removed");

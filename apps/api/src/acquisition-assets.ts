@@ -57,6 +57,33 @@ function defaultRequest(url: URL, address: Address, maxBytes: number, timeoutMs:
   });
 }
 
+/** Shared bounded transport: every redirect is DNS checked and pinned before any bytes are read. */
+function boundedAssetGetter(options: BusinessAssetOptions, durationMs = 35_000) {
+  const resolve = options.resolve ?? (host => lookup(host, { all: true, verbatim: true }));
+  const request = options.request ?? defaultRequest;
+  const deadline = Date.now() + durationMs;
+  let requests = 0;
+  const get = async (value: string, maxBytes: number): Promise<{ url: string; response: AssetResponse }> => {
+    let url = safeBusinessAssetUrl(value);
+    for (let redirect = 0; redirect <= 2; redirect++) {
+      if (++requests > 11 || Date.now() >= deadline) throw new Error("Bounded enrichment budget exhausted.");
+      const addresses = await Promise.race([resolve(url.hostname), new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("DNS timeout.")), 3000); timer.unref(); })]);
+      if (!addresses.length || addresses.some(address => !isPublicAssetAddress(address.address))) throw new Error("Website resolves to a non-public address.");
+      const address = addresses.find(a => a.family === 4) ?? addresses[0]!;
+      const response = await request(url, address, maxBytes, Math.max(1, Math.min(10_000, deadline - Date.now())));
+      if (response.body.length > maxBytes) throw new Error("Response exceeds byte limit.");
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        if (redirect === 2 || !response.headers.location) throw new Error("Redirect limit.");
+        url = safeBusinessAssetUrl(response.headers.location, url.href); continue;
+      }
+      if (response.status !== 200) throw new Error("Website did not return a usable page.");
+      return { url: url.href, response };
+    }
+    throw new Error("Redirect limit.");
+  };
+  return { get, requestCount: () => requests };
+}
+
 function entities(value: string): string {
   return value.replace(/&(?:amp|quot|apos|lt|gt|nbsp|#\d{1,7}|#x[0-9a-f]{1,6});/gi, entity => {
     const known: Record<string, string> = { "&amp;": "&", "&quot;": '"', "&apos;": "'", "&lt;": "<", "&gt;": ">", "&nbsp;": " " };
@@ -310,6 +337,141 @@ export function rasterDimensions(bytes: Uint8Array): { mime: BusinessImage["mime
     else if (kind === "VP8L" && b[20] === 47) result = { mime: "image/webp", width: 1 + (((b[22]! & 0x3f) << 8) | b[21]!), height: 1 + (((b[24]! & 0x0f) << 10) | (b[23]! << 2) | ((b[22]! & 0xc0) >> 6)) };
   }
   return result && result.width > 0 && result.height > 0 && result.width <= 6000 && result.height <= 6000 && result.width * result.height <= 12_000_000 ? result : null;
+}
+
+export interface PublicBusinessAssetCandidate { url: string; kind: "logo" | "photo"; alt: string }
+export interface VerifiedPublicBusinessAssets { sourceUrl: string; fetchedAt: string; logo?: BusinessImage; images: BusinessImage[]; notices: string[] }
+export class PublicBusinessAssetError extends Error {
+  constructor(message: string, readonly status: 400 | 409 | 503 = 400) { super(message); }
+}
+
+function identityWords(value: string): string[] {
+  return value.toLowerCase().replace(/&/g, " and ").replace(/\(fictional\)/g, " ").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).filter(word => !["pty", "ltd", "the", "and"].includes(word));
+}
+
+/** A bounded token scan, so markup-like text in comments, scripts or attributes is never an element. */
+function publicPageArtworkMarkup(html: string): { titles: string[]; tags: Array<{ name: string; attrs: Record<string, string> }> } {
+  const lower = html.toLowerCase(), titles: string[] = [], tags: Array<{ name: string; attrs: Record<string, string> }> = [];
+  const hidden: string[] = [];
+  let cursor = 0, scanned = 0, bodyStarted = false;
+  while (cursor < html.length && scanned++ < 100_000) {
+    const start = html.indexOf("<", cursor);
+    if (start < 0) break;
+    if (html.startsWith("<!--", start)) {
+      const end = html.indexOf("-->", start + 4); if (end < 0) break;
+      cursor = end + 3; continue;
+    }
+    let end = start + 1, quote = "";
+    for (; end < html.length && end - start <= 6000; end++) {
+      const character = html[end]!;
+      if (quote) { if (character === quote) quote = ""; }
+      else if (character === '"' || character === "'") quote = character;
+      else if (character === ">") break;
+    }
+    if (end >= html.length || end - start > 6000) break;
+    cursor = end + 1;
+    const tag = html.slice(start, end + 1), parsed = /^<\s*(\/?)\s*([a-z][a-z0-9:-]*)\b/i.exec(tag);
+    if (!parsed) continue;
+    const name = parsed[2]!.toLowerCase(), closing = Boolean(parsed[1]);
+    if (!closing && ["script", "style", "textarea", "iframe", "xmp"].includes(name)) {
+      const close = lower.indexOf(`</${name}`, cursor); if (close < 0) break;
+      const closeEnd = lower.indexOf(">", close); if (closeEnd < 0) break;
+      cursor = closeEnd + 1; continue;
+    }
+    if (["template", "noscript", "svg", "math"].includes(name)) {
+      if (!closing) hidden.push(name);
+      else { const at = hidden.lastIndexOf(name); if (at >= 0) hidden.length = at; }
+      continue;
+    }
+    if (hidden.length || closing) continue;
+    if (name === "plaintext") break;
+    if (!bodyStarted && !["html", "head", "meta", "title", "link", "base"].includes(name)) bodyStarted = true;
+    const attrs = attributes(tag);
+    if (name === "title") {
+      const close = lower.indexOf("</title", cursor); if (close < 0) break;
+      const closeEnd = lower.indexOf(">", close); if (closeEnd < 0) break;
+      if (!bodyStarted && close - cursor <= 2000 && titles.length < 12) titles.push(entities(html.slice(cursor, close)));
+      cursor = closeEnd + 1; continue;
+    }
+    if (name === "meta" && !bodyStarted && ["og:title", "twitter:title"].includes((attrs.property ?? attrs.name ?? "").toLowerCase()) && attrs.content && titles.length < 12) titles.push(attrs.content);
+    if (["img", "source", "meta"].includes(name) && tags.length < 300) tags.push({ name, attrs });
+  }
+  return { titles, tags };
+}
+
+/** A directory's generic body text is insufficient; its actual document title must identify this business. */
+export function publicListingIdentityMatches(html: string, businessName: string): boolean {
+  const expected = identityWords(businessName);
+  if (!expected.length) return false;
+  const needle = expected.join(" ");
+  return publicPageArtworkMarkup(html).titles.some(value => (` ${identityWords(value).join(" ")} `).includes(` ${needle} `));
+}
+
+/** Only explicit image element/metadata references are eligible, never scripts or arbitrary text URLs. */
+function linkedPublicImages(html: string, pageUrl: string): Map<string, string> {
+  const refs = new Map<string, string>();
+  const add = (raw: string | undefined, marker: string) => {
+    if (!raw || refs.size >= 120) return;
+    try { refs.set(safeBusinessAssetUrl(raw, pageUrl).href, marker); } catch { /* Unsupported references remain untrusted text. */ }
+  };
+  for (const { name, attrs: a } of publicPageArtworkMarkup(html).tags) {
+    const marker = `${a.alt ?? ""} ${a.class ?? ""} ${a.id ?? ""}`;
+    if (name === "meta") {
+      if (["og:image", "og:image:secure_url", "twitter:image"].includes((a.property ?? a.name ?? "").toLowerCase())) add(a.content, marker);
+    } else {
+      for (const key of ["src", "data-src", "data-lazy-src"]) add(a[key], marker);
+      for (const key of ["srcset", "data-srcset"]) for (const value of (a[key] ?? "").split(",").slice(0, 20)) add(value.trim().split(/\s+/)[0], marker);
+    }
+    if (refs.size >= 120) break;
+  }
+  return refs;
+}
+
+/** Explicitly selected, page-linked artwork from a named public business profile; no search or paid API. */
+export class PublicBusinessAssetImporter {
+  constructor(private readonly options: BusinessAssetOptions = {}) {}
+  async import(input: { businessName: string; sourcePageUrl: string; images: PublicBusinessAssetCandidate[] }): Promise<VerifiedPublicBusinessAssets> {
+    if (typeof input.businessName !== "string" || !input.businessName.trim() || input.businessName.length > 160 || !Array.isArray(input.images) || !input.images.length || input.images.length > 4) throw new PublicBusinessAssetError("Select one to four sourced business image references.");
+    let source: URL;
+    try { source = safeBusinessAssetUrl(input.sourcePageUrl); } catch { throw new PublicBusinessAssetError("Use the business's exact public HTTPS source page."); }
+    const candidates: PublicBusinessAssetCandidate[] = [];
+    for (const candidate of input.images) {
+      if (!candidate || !["logo", "photo"].includes(candidate.kind) || typeof candidate.alt !== "string" || candidate.alt.length > 180 || /[\u0000-\u001f\u007f]/.test(candidate.alt) || typeof candidate.url !== "string") throw new PublicBusinessAssetError("Provide bounded logo or photograph references with plain alt text.");
+      let url: string;
+      try { url = safeBusinessAssetUrl(candidate.url).href; } catch { throw new PublicBusinessAssetError("Use public HTTPS image references without credentials."); }
+      if (candidates.some(item => item.url === url)) throw new PublicBusinessAssetError("Select each image only once.");
+      candidates.push({ url, kind: candidate.kind, alt: text(candidate.alt, 180) ?? "Public business profile image" });
+    }
+    if (candidates.filter(item => item.kind === "logo").length > 1 || candidates.filter(item => item.kind === "photo").length > 3) throw new PublicBusinessAssetError("Select at most one logo and three photographs.");
+    const transport = boundedAssetGetter(this.options), result: VerifiedPublicBusinessAssets = { sourceUrl: source.href, fetchedAt: (this.options.clock ?? (() => new Date()))().toISOString(), images: [], notices: ["Artwork is linked from the cited public business profile. Ownership, permission and reuse rights have not been verified; review before publication."] };
+    let page: Awaited<ReturnType<typeof transport.get>>;
+    try { page = await transport.get(source.href, HTML_LIMIT); } catch { throw new PublicBusinessAssetError("The public business source could not be read. No substitute artwork was imported.", 503); }
+    const final = new URL(page.url);
+    if (final.hostname.replace(/^www\./, "") !== source.hostname.replace(/^www\./, "")) throw new PublicBusinessAssetError("The source redirected to another domain. Review its identity before importing artwork.", 409);
+    if (!/^(?:text\/html|application\/xhtml\+xml)(?:;|$)/i.test(page.response.headers["content-type"] ?? "")) throw new PublicBusinessAssetError("The business source did not return an HTML page.", 503);
+    const html = Buffer.from(page.response.body).toString("utf8");
+    if (!publicListingIdentityMatches(html, input.businessName)) throw new PublicBusinessAssetError("The page title does not identify this business. No artwork was imported.", 409);
+    if (publicArtworkProhibited(html)) throw new PublicBusinessAssetError("The public source expressly restricts reproducing its content. No artwork was downloaded.", 409);
+    const linked = linkedPublicImages(html, page.url);
+    for (const candidate of candidates) {
+      if (!linked.has(candidate.url)) throw new PublicBusinessAssetError("A selected image is not linked by the business source page. No artwork was imported.", 409);
+      if (/advert|sponsor|tracking|pixel|gravatar|avatar|captcha|directory[-_ ]?logo|payment|visa[-_ ]?logo|mastercard/i.test(`${candidate.url} ${linked.get(candidate.url)}`)) throw new PublicBusinessAssetError("Directory, advertising or tracking artwork cannot become business branding.", 409);
+    }
+    let imageBytes = 0;
+    for (const candidate of candidates) {
+      try {
+        const asset = await transport.get(candidate.url, Math.min(IMAGE_LIMIT, TOTAL_IMAGE_LIMIT - imageBytes));
+        imageBytes += asset.response.body.length;
+        const dimensions = rasterDimensions(asset.response.body);
+        if (!dimensions || !new RegExp(`^${dimensions.mime.replace("/", "\\/")}(?:;|$)`, "i").test(asset.response.headers["content-type"] ?? "") || (candidate.kind === "logo" ? dimensions.width < 24 || dimensions.height < 16 : dimensions.width < 240 || dimensions.height < 160)) throw new Error("Unsupported raster artwork.");
+        const image: BusinessImage = { ...dimensions, sourceUrl: asset.url, alt: candidate.alt, dataUrl: `data:${dimensions.mime};base64,${Buffer.from(asset.response.body).toString("base64")}`, sha256: createHash("sha256").update(asset.response.body).digest("hex") };
+        if (image.sha256 === result.logo?.sha256 || result.images.some(value => value.sha256 === image.sha256)) continue;
+        if (candidate.kind === "logo") result.logo = image; else result.images.push(image);
+      } catch { result.notices.push(`The selected ${candidate.kind === "logo" ? "logo" : "photograph"} could not be imported as a bounded PNG, JPEG or WebP image. It was not substituted.`); }
+      if (imageBytes >= TOTAL_IMAGE_LIMIT) break;
+    }
+    return result;
+  }
 }
 
 /** Fetches a website and a few image references, with DNS pinning and no paid image/search API. */

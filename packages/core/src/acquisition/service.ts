@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Atlas } from "../orchestrator.js";
 import type { Prospect } from "../wulff/prospects.js";
+import { isCustomerStage } from "../wulff/pipeline.js";
 import { contentHash, newId } from "../ids.js";
-import { exportDemoReactProject, renderDemoWebsite, safeDemoWebsite } from "./demo-renderer.js";
+import { exportDemoReactProject, renderDemoWebsite, safeDemoWebsite, type RenderedDemoWebsite } from "./demo-renderer.js";
 import { DEMO_TEMPLATES, getDemoTemplate, type DemoTemplateId } from "./templates.js";
-import { businessProfileSummary, type BusinessProfile, type BusinessProfileEnricher, type BusinessProfileSummary } from "./business-profile.js";
+import { businessProfileSummary, type BusinessImage, type BusinessProfile, type BusinessProfileEnricher, type BusinessProfileSummary } from "./business-profile.js";
 
 export interface AcquisitionMailTransport {
   status(): Promise<{ state: "connected" | "not_connected" | "error" | "fake"; provider: string; detail: string; sender?: string }>;
@@ -34,7 +35,7 @@ export interface AcquisitionContactInput {
 }
 export interface AcquisitionContact extends AcquisitionContactInput { reviewedBy?: string; reviewedAt?: string }
 export interface AcquisitionSenderInput { name: string; organisation: string; email: string; contactDetails: string }
-export interface AddAcquisitionLeadInput { businessName: string; location: string; industry: string; website?: string | null; sourceUrl: string; observation: string; services?: string[]; contactEmail?: string; contactSourceUrl?: string }
+export interface AddAcquisitionLeadInput { businessName: string; location: string; industry: string; website?: string | null; sourceUrl: string; observation: string; services?: string[]; contactEmail?: string; contactSourceUrl?: string; description?: string; address?: string; phone?: string }
 export type AcquisitionDraftStatus = "draft" | "blocked" | "awaiting_approval" | "queued" | "submitting" | "accepted" | "failed" | "uncertain" | "cancelled" | "simulated";
 export interface AcquisitionRecord {
   id: string; prospectId: string; businessName: string; location: string; industry: string; website: string | null; sourceUrl: string; observation: string; services: string[]; createdAt: string; updatedAt: string;
@@ -43,7 +44,7 @@ export interface AcquisitionRecord {
   archiveReason?: string;
   businessProfile?: BusinessProfileSummary;
   contact: AcquisitionContact | null;
-  demo: { id: string; templateId: DemoTemplateId; templateName: string; htmlHash: string; previewPath: string; publicPath: string | null; publishedAt?: string; expiresAt: string } | null;
+  demo: { id: string; templateId: DemoTemplateId; templateName: string; htmlHash: string; previewPath: string; publicPath: string | null; publishedAt?: string; expiresAt: string; designBrief?: RenderedDemoWebsite["designBrief"] } | null;
   draft: { id: string; version: number; from: string; to: string; subject: string; text: string; contentHash: string; status: AcquisitionDraftStatus; blockers: string[]; mailProviderIdentity?: string; approvalId?: string; providerRef?: string; acceptedAt?: string } | null;
 }
 export interface AcquisitionSnapshot {
@@ -59,6 +60,7 @@ interface UnsubscribeRecord { tokenHash: string; emailHash: string; leadId: stri
 interface PrivateLead { unsubscribeToken: string; unsubscribeEmail: string }
 interface SendPayload { leadId: string; expectedHash: string; day: string }
 interface SendAttempt { id: string; leadId: string; draftId: string; emailHash: string; businessId: string; day: string; reservedAt: string; state: "submitting" | "accepted" | "uncertain"; providerRef?: string }
+interface Preparation { inputHash: string; demoId: string; previousDemoId: string | null; completed: boolean }
 const RECORDS = "acquisition_records", DEMOS = "acquisition_demos", TOKENS = "acquisition_demo_tokens", PRIVATE = "acquisition_private", UNSUB = "acquisition_unsubscribe", SUPPRESSED = "acquisition_suppressions", ATTEMPTS = "acquisition_attempts", RESERVED = "acquisition_reservations";
 const SEND_JOB = "acquisition_outreach_send";
 const PROFILES = "acquisition_business_profiles";
@@ -135,17 +137,53 @@ export class AcquisitionService {
     const sourceUrl = sourceUrlValue(input.sourceUrl, this.options.mode), observation = required(input.observation, "Source observation", 1800);
     const website = input.website ? sourceUrlValue(input.website, this.options.mode) : null;
     const services = servicesValue(input.services ?? []);
+    const description = input.description === undefined ? undefined : required(input.description, "Sourced business description", 900);
+    const address = input.address === undefined ? undefined : required(input.address, "Sourced business address", 320);
+    const phone = input.phone === undefined ? undefined : required(input.phone, "Sourced business phone", 32);
+    if (phone && (!/^\+?[\d() .-]{6,32}$/.test(phone) || phone.replace(/\D/g, "").length < 6 || phone.replace(/\D/g, "").length > 15)) throw new AcquisitionError("Provide one factual business phone number from the recorded source.", 400);
     const { prospect } = this.atlas.prospects.upsert({ businessName, location, industry, website, commercialOpportunity: "Independent website concept prepared from the recorded public source; commercial interest is unverified.", recommendedScope: "Independent website concept for owner review.", internalRecommendedPriceAud: null, evidence: [{ id: newId("evd"), reviewedAt: this.iso(), observation, sourceUrl, method: "manual", status: "unverified", uncertainty: "Source-backed research is not contact permission or proof of purchase intent." }], fixture: this.options.mode === "fake" });
     const existing = this.records(true).find(record => record.prospectId === prospect.id);
     if (existing?.archivedAt) throw new AcquisitionError("This lead is archived and cannot be imported again without an explicit restore.");
     if (existing) return existing;
     const record: AcquisitionRecord = { id: newId("acq"), prospectId: prospect.id, businessName, location, industry, website, sourceUrl, observation, services, createdAt: this.iso(), updatedAt: this.iso(), contact: null, demo: null, draft: null };
     if (input.contactEmail) record.contact = { email: emailValue(input.contactEmail, this.options.mode), sourceUrl: sourceUrlValue(input.contactSourceUrl ?? input.sourceUrl, this.options.mode), basis: "none_established", evidence: "", roleRelevant: false, noMarketingProhibition: false };
+    if (description || address || phone || services.length) {
+      const profile: BusinessProfile = { sourceKind: "public_research", state: this.options.mode === "fake" ? "fictional" : "partial", detail: "Research facts recorded from the cited public source. Identity and current details still need owner review.", sourceUrl, fetchedAt: this.iso(), description, address, phone, services, images: [], notices: ["No business logo or photograph is invented. Any generated concept artwork is labelled as an original illustration."] };
+      this.store.upsertDoc(PROFILES, record.id, profile); record.businessProfile = businessProfileSummary(profile);
+    }
     this.save(record);
     return record;
   }
 
-  prepare(leadId: string, options: { templateId?: string } = {}): AcquisitionRecord {
+  importExistingProspect(prospectId: string): AcquisitionRecord {
+    const prospect = this.atlas.prospects.require(prospectId);
+    if (this.options.mode === "live" && prospect.fixture) throw new AcquisitionError("Fictional prospects cannot be imported into a live batch.");
+    const existing = this.records(true).find(record => record.prospectId === prospectId);
+    if (existing?.archivedAt) throw new AcquisitionError("Archived prospects remain excluded from rebuilding.");
+    return this.importProspect(prospect);
+  }
+
+  /** Called only after the server has verified page identity, linked asset URLs and raster bytes. */
+  applyVerifiedPublicAssets(leadId: string, assets: { sourceUrl: string; fetchedAt: string; logo?: BusinessImage; images: BusinessImage[]; notices: string[] }, expectedRevision: string): AcquisitionRecord {
+    const record = this.require(leadId); this.assertEditable(record);
+    const profile = this.store.getDoc<BusinessProfile>(PROFILES, leadId)?.doc ?? null;
+    const prospect = this.atlas.prospects.require(record.prospectId);
+    if (record.website || prospect.website || prospect.contactEligibility.suppressed || prospect.qualification === "disqualified" || isCustomerStage(prospect.stage) || ["accepted", "queued", "submitting", "uncertain", "simulated", "cancelled"].includes(record.draft?.status ?? "draft")) throw new AcquisitionError("This prospect is no longer eligible for public profile artwork preparation.");
+    if (contentHash({ record, profile, prospect }) !== expectedRevision) throw new AcquisitionError("The business changed while its public artwork was checked. Its current facts and draft were preserved.");
+    if (sourceUrlValue(assets.sourceUrl, this.options.mode) !== sourceUrlValue(record.sourceUrl, this.options.mode) || !Array.isArray(assets.images) || assets.images.length > 3 || !Number.isFinite(Date.parse(assets.fetchedAt))) throw new AcquisitionError("Use verified artwork linked from this business's recorded source page.", 400);
+    for (const image of [...(assets.logo ? [assets.logo] : []), ...assets.images]) {
+      const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(image.dataUrl);
+      if (!match || match[1] !== image.mime || match[2]!.length > 2_800_000 || sha(Buffer.from(match[2]!, "base64")) !== image.sha256) throw new AcquisitionError("Only bounded, verified raster business artwork can be stored.", 400);
+      sourceUrlValue(image.sourceUrl, this.options.mode);
+    }
+    const images = [...new Map([...assets.images, ...(profile?.images ?? [])].map(image => [image.sha256, image])).values()].slice(0, 3);
+    const next: BusinessProfile = { ...(profile ?? { state: this.options.mode === "fake" ? "fictional" : "partial", detail: "Public business source facts require owner review.", sourceUrl: record.sourceUrl, services: record.services, images: [], notices: [] }), sourceKind: "public_research", fetchedAt: assets.fetchedAt, ...(assets.logo ? { logo: assets.logo } : {}), images, notices: [...new Set([...(profile?.notices ?? []), ...assets.notices.slice(0, 8)])] };
+    this.store.upsertDoc(PROFILES, leadId, next); record.businessProfile = businessProfileSummary(next); this.save(record);
+    this.atlas.audit.record({ actor: "owner", action: "read.website", business: "wulff_studio", targetType: "acquisition", targetId: leadId, outcome: this.options.mode === "fake" ? "simulated" : "completed", detail: { operation: "verified_public_artwork_saved", logoCount: assets.logo ? 1 : 0, photoCount: assets.images.length } });
+    return record;
+  }
+
+  prepare(leadId: string, options: { templateId?: string; preserveDraft?: boolean; idempotencyKey?: string } = {}): AcquisitionRecord {
     const record = this.require(leadId);
     this.assertEditable(record);
     if (options.templateId !== undefined) getDemoTemplate(options.templateId as DemoTemplateId);
@@ -155,12 +193,32 @@ export class AcquisitionService {
     const businessProfile = this.store.getDoc<BusinessProfile>(PROFILES, leadId)?.doc;
     const input = { businessName: record.businessName, location: record.location, industry: record.industry, services: record.services, website, contactEmail: record.contact?.email, templateId: options.templateId as DemoTemplateId | undefined, fixture: Boolean(prospect.fixture), businessProfile, studio: this.company() };
     const rendered = renderDemoWebsite(input);
-    const id = newId("demo"), rawToken = token(), expiresAt = new Date(this.clock().getTime() + 14 * 86_400_000).toISOString();
-    const internal: InternalDemo = { id, leadId, html: rendered.html, csp: rendered.contentSecurityPolicy, htmlHash: sha(rendered.html), publicTokenHash: sha(rawToken), publicPath: `/demos/${rawToken}`, expiresAt, ...(rendered.templateId === "clarity" ? { sourceFiles: exportDemoReactProject({ ...input, templateId: "clarity" }) } : {}) };
+    const key = options.idempotencyKey;
+    if (key !== undefined && (typeof key !== "string" || !/^[A-Za-z0-9:_-]{1,240}$/.test(key))) throw new AcquisitionError("Provide a bounded private preparation key.", 400);
+    const preparationId = key ? sha(`${leadId}:${key}`) : null;
+    const inputHash = contentHash({ input, preserveDraft: Boolean(options.preserveDraft), rendererHash: sha(rendered.html) });
+    const saved = preparationId ? this.store.getDoc<Preparation>("acquisition_preparations", preparationId)?.doc : null;
+    if (saved) {
+      if (saved.inputHash !== inputHash || (record.demo?.id !== saved.demoId && (saved.completed || (record.demo?.id ?? null) !== saved.previousDemoId))) throw new AcquisitionError("The business or concept changed after this rebuild was requested. Review the current version before rebuilding again.");
+      if (record.demo?.id === saved.demoId) { this.store.upsertDoc("acquisition_preparations", preparationId!, { ...saved, completed: true }); return record; }
+    }
+    const id = saved?.demoId ?? newId("demo"), previousDemoId = record.demo?.id ?? null;
+    if (preparationId && !saved) this.store.upsertDoc<Preparation>("acquisition_preparations", preparationId, { inputHash, demoId: id, previousDemoId, completed: false });
+    const previousUrl = record.demo ? this.url(this.internal(record).publicPath) : null;
+    const priorDraft = record.draft ? structuredClone(record.draft) : null;
+    const existingDemo = saved ? this.store.getDoc<InternalDemo>(DEMOS, id)?.doc : null;
+    const rawToken = token(), expiresAt = existingDemo?.expiresAt ?? new Date(this.clock().getTime() + 14 * 86_400_000).toISOString();
+    const internal: InternalDemo = existingDemo ?? { id, leadId, html: rendered.html, csp: rendered.contentSecurityPolicy, htmlHash: sha(rendered.html), publicTokenHash: sha(rawToken), publicPath: `/demos/${rawToken}`, expiresAt, ...(["clarity", "immersive"].includes(rendered.templateId) ? { sourceFiles: exportDemoReactProject({ ...input, templateId: rendered.templateId }) } : {}) };
+    if (sha(internal.html) !== sha(rendered.html)) throw new AcquisitionError("The saved private rebuild differs from the requested design.");
     this.store.upsertDoc(DEMOS, id, internal);
     this.store.upsertDoc(TOKENS, internal.publicTokenHash, { demoId: id });
-    record.demo = { id, templateId: rendered.templateId, templateName: rendered.templateName, htmlHash: internal.htmlHash, previewPath: `/api/acquisition/demos/${id}/preview`, publicPath: null, expiresAt };
-    this.compose(record);
+    record.demo = { id, templateId: rendered.templateId, templateName: rendered.templateName, htmlHash: internal.htmlHash, previewPath: `/api/acquisition/demos/${id}/preview`, publicPath: null, expiresAt, ...(rendered.designBrief ? { designBrief: rendered.designBrief } : {}) };
+    if (options.preserveDraft && priorDraft && previousUrl) {
+      record.draft = { ...priorDraft, version: priorDraft.version + 1, text: priorDraft.text.split(previousUrl).join(this.url(internal.publicPath)), status: "draft", blockers: [], mailProviderIdentity: this.options.mailProviderIdentity?.() ?? "default" };
+      delete record.draft.approvalId; delete record.draft.providerRef; delete record.draft.acceptedAt;
+      record.draft.contentHash = contentHash(this.payload(record)); this.save(record);
+    } else this.compose(record);
+    if (preparationId) this.store.upsertDoc<Preparation>("acquisition_preparations", preparationId, { inputHash, demoId: id, previousDemoId, completed: true });
     this.atlas.audit.record({ actor: "agent:design", action: "acquisition.demo.prepared", business: "wulff_studio", targetType: "acquisition", targetId: record.id, outcome: "completed", detail: { demoId: id, htmlHash: internal.htmlHash, templateId: rendered.templateId } });
     return record;
   }
@@ -171,7 +229,7 @@ export class AcquisitionService {
     const templateId = options.templateId ?? initial.demo?.templateId;
     if (options.templateId !== undefined) getDemoTemplate(options.templateId as DemoTemplateId);
     const cached = this.store.getDoc<BusinessProfile>(PROFILES, leadId)?.doc;
-    const fresh = cached && Date.parse(cached.fetchedAt) > this.clock().getTime() - 7 * 86_400_000;
+    const fresh = cached && cached.sourceKind !== "public_research" && Date.parse(cached.fetchedAt) > this.clock().getTime() - 7 * 86_400_000;
     if ((!fresh || options.refresh) && this.options.enricher) {
       const revision = contentHash(initial);
       let profile: BusinessProfile;
@@ -315,9 +373,9 @@ export class AcquisitionService {
   ownerPreview(demoId: string): { html: string; csp: string } | null { const demo = this.store.getDoc<InternalDemo>(DEMOS, demoId)?.doc; const lead = demo ? this.store.getDoc<AcquisitionRecord>(RECORDS, demo.leadId)?.doc : null; return demo && lead && !lead.archivedAt ? { html: demo.html, csp: demo.csp } : null; }
   sourceProject(leadId: string): { name: string; files: Readonly<Record<string, string>> } {
     const record = this.require(leadId);
-    if (!record.demo || record.demo.templateId !== "clarity") throw new AcquisitionError("Build a Clarity concept first to download its matching React project.");
+    if (!record.demo || !["clarity", "immersive"].includes(record.demo.templateId)) throw new AcquisitionError("Build a Clarity or Immersive concept first to download its matching React project.");
     const demo = this.internal(record);
-    if (!demo.sourceFiles || sha(demo.html) !== record.demo.htmlHash) throw new AcquisitionError("Rebuild this Clarity concept to create its matching source download.");
+    if (!demo.sourceFiles || sha(demo.html) !== record.demo.htmlHash) throw new AcquisitionError("Rebuild this concept to create its matching source download.");
     return { name: record.businessName, files: demo.sourceFiles };
   }
   publicPreview(rawToken: string): { html: string; csp: string } | null {
@@ -482,7 +540,7 @@ export class AcquisitionService {
   private url(path: string): string { return `${this.origin}${path}`; }
 }
 
-function sha(value: string): string { return createHash("sha256").update(value).digest("hex"); }
+function sha(value: string | Uint8Array): string { return createHash("sha256").update(value).digest("hex"); }
 function token(): string { return randomBytes(24).toString("base64url"); }
 function validToken(value: string): boolean { return typeof value === "string" && /^[A-Za-z0-9_-]{32}$/.test(value); }
 function day(value: Date): string { const parts = new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Melbourne", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value); return ["year", "month", "day"].map(type => parts.find(part => part.type === type)!.value).join("-"); }
