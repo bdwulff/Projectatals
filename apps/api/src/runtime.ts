@@ -9,6 +9,7 @@ import { OwnerUpdates } from "./owner-updates.js";
 import { OfficialBusinessEnricher } from "./acquisition-assets.js";
 import { DiscoveryProgram } from "./discovery-program.js";
 import { SiteRebuilds } from "./site-rebuilds.js";
+import { ProspectPricing } from "./prospect-pricing.js";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -34,7 +35,7 @@ export function fixtureWebsiteTable() {
   };
 }
 
-export interface Runtime { atlas: Atlas; acquisition: AcquisitionService; acquisitionMail: AcquisitionMailTransport; mailProviders: SelectableAcquisitionMailTransport; googleMail: GmailAcquisitionMailTransport; ownerUpdates: OwnerUpdates; discoveryProgram: DiscoveryProgram; siteRebuilds: SiteRebuilds; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
+export interface Runtime { atlas: Atlas; acquisition: AcquisitionService; acquisitionMail: AcquisitionMailTransport; mailProviders: SelectableAcquisitionMailTransport; googleMail: GmailAcquisitionMailTransport; ownerUpdates: OwnerUpdates; discoveryProgram: DiscoveryProgram; siteRebuilds: SiteRebuilds; prospectPricing: ProspectPricing; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
 
 export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   const requestedMode = env.ATLAS_MODE ?? "fake";
@@ -80,7 +81,9 @@ export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   const acquisition = new AcquisitionService(atlas, { mode: forceFake ? "fake" : "live", publicOrigin: env.ATLAS_PUBLIC_ORIGIN, mailer: acquisitionMail, mailProviderIdentity: () => forceFake ? "fictional" : mailProviders.selected() === "gmail" ? googleMail.identity() : mailProviders.selected() ?? "invalid", enricher: forceFake ? undefined : new OfficialBusinessEnricher(), fromAddress: env.ATLAS_OUTREACH_FROM ?? "", senderName: env.ATLAS_OUTREACH_SENDER_NAME ?? "Brandon Wulff", organisation: "Wulff Studio", contactDetails: env.ATLAS_OUTREACH_CONTACT, maxSendsPerDay: 5 });
   const ownerUpdates = new OwnerUpdates({ atlas, mode: forceFake ? "fake" : "live", mailer: acquisitionMail, publicOrigin: env.ATLAS_PUBLIC_ORIGIN, ownerAccessKey: env.ATLAS_OWNER_ACCESS_KEY, telegramToken: forceFake ? undefined : env.TELEGRAM_BOT_TOKEN, telegramChatId: forceFake ? undefined : env.TELEGRAM_OWNER_CHAT_ID, counts: async () => { const snapshot = await acquisition.snapshot(); return { candidates: snapshot.records.length, concepts: snapshot.records.filter(r => r.demo).length, pendingReview: snapshot.records.filter(r => r.draft && ["draft", "blocked", "awaiting_approval"].includes(r.draft.status)).length }; } });
   for (const notifier of ownerUpdates.notifiers()) atlas.notifications.use(notifier);
-  const discoveryProgram = new DiscoveryProgram({ atlas, acquisition, mode: forceFake ? "fake" : "live", env });
+  const prospectPricing = new ProspectPricing({ atlas, mode: forceFake ? "fake" : "live", publicOrigin: env.ATLAS_PUBLIC_ORIGIN });
+  prospectPricing.sync();
+  const discoveryProgram = new DiscoveryProgram({ atlas, acquisition, mode: forceFake ? "fake" : "live", env, onPrepared: () => prospectPricing.sync() });
   const siteRebuilds = new SiteRebuilds({ atlas, acquisition, mode: forceFake ? "fake" : "live", notificationPriority: "action_needed" });
-  return { atlas, acquisition, acquisitionMail, mailProviders, googleMail, ownerUpdates, discoveryProgram, siteRebuilds, mode: forceFake ? "fake" : "live", fakes };
+  return { atlas, acquisition, acquisitionMail, mailProviders, googleMail, ownerUpdates, discoveryProgram, siteRebuilds, prospectPricing, mode: forceFake ? "fake" : "live", fakes };
 }

@@ -139,6 +139,14 @@ owner review-list notification are verified on the hosted release. See
 [PHOTO-SHOWCASE.md](docs/PHOTO-SHOWCASE.md) for the 15 free-template references,
 asset provenance, private rebuild policy and validation results.
 
+The daily manual-outreach revision targets 20 Melbourne-area businesses with
+published email contacts, Simple private demos and introductions for the owner to
+send. The hosted first list contains 20 new demos/drafts; the master pricing and
+prospect workbook contains 47 saved rows. Daily research is enabled after 7 am,
+with a flexible 9 am Melbourne-time ChatGPT reminder from 29 October 2026.
+See [DAILY-OUTREACH.md](docs/DAILY-OUTREACH.md) for source limits, separate editable
+XLSX/CSV pricing and the manual workflow. No client email is sent automatically.
+
 ## Private Jarvis on Mac and iPhone
 
 The owner dashboard can be used from anywhere after Railway account authorisation

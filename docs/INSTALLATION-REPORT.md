@@ -1,6 +1,35 @@
 # Atlas installation and operational report — 28 October 2026
 
-> **Current verified update — photographic showcase:** Railway deployment
+> **Current verified update — daily manual outreach:** Railway deployment
+> `dc896841-d318-435f-8e18-2d546102fa33` reached **SUCCESS** on 28 October 2026.
+> Current component results total 596 passed (244 core, 303 API, seven MCP,
+> 24 local-agent, 18 UI): the 594-test full workspace run passed before two added
+> API source guards, followed by the passing final 303-test API suite. Complete
+> production/API builds passed, together with 330/330 Simple renderer/export
+> checks, 79/79 local UI checks at 1440/390/320, 10/10 independent XLSX checks and 16
+> backend pricing tests. Hosted UI passed 298/298 at 1440/390: all 20 previews
+> loaded four photos, with no runtime errors/external calls; the verification
+> session was revoked. The reviewed real-source import produced 20/20 new Simple
+> demos and sourced introductory drafts with four distinct decoded embedded photos
+> per demo. All 20 source ZIPs passed CRC and excluded the owner phone; all 20 new
+> emails include its privately configured signature without prices or unpublished
+> demo links. Nineteen prior editable drafts were preserved except the authorised
+> sender-identity/signature update. The master workbook opens with 47 current and
+> historical rows; today's internal estimates are 13 at A$699 and seven at A$999.
+> An owner-only handoff workbook contains just the 20 new daily rows on Pricing
+> and Prospects, with no Email drafts sheet; a separate ZIP contains 20 saved
+> `.eml` drafts. These snapshots stay outside Git; the live master remains 47 rows.
+> Repeating Run added no records or provider searches. The persisted notification
+> reports 20 of 20 ready. Daily settings are enabled for 20 Simple/no-own-website
+> prospects across Melbourne and south-east, with worker checks after 7 am. The
+> flexible daily 9 am Melbourne-time ChatGPT reminder is enabled from 29 October 2026;
+> future scheduled execution/delivery and physical device speech remain unverified.
+> No client emails, public concepts, customer-quote changes, model generation or
+> paid voice requests occurred. Existing hosting charges apply. See
+> [DAILY-OUTREACH.md](DAILY-OUTREACH.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+> Older milestones below are historical.
+
+> **Previous verified update — photographic showcase:** Railway deployment
 > `c31f974a-5133-48e7-a7c2-ae5fe4865dc6` reached **SUCCESS** on 28 October 2026.
 > All 537 workspace tests (231 core, 260 API, seven MCP, 24 local-agent and 15 UI),
 > the production build, 330 renderer/export checks, 51 local review-UI browser

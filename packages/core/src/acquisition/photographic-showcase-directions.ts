@@ -5,7 +5,7 @@ import type { StockSector } from "./stock-photos.js";
 export type ImmersiveFamily = "automotive" | "craft" | "movement" | "editorial";
 export type ShowcaseSector = StockSector | "professional";
 export interface ImmersiveDesignBrief {
-  readonly id:string; readonly family:ImmersiveFamily; readonly sector:ShowcaseSector; readonly direction:string;
+  readonly mode?:"simple"; readonly id:string; readonly family:ImmersiveFamily; readonly sector:ShowcaseSector; readonly direction:string;
   readonly palette:{readonly background:string;readonly foreground:string;readonly accent:string;readonly muted:string};
   readonly layout:string;readonly typography:string;readonly headline:string;readonly signature:string;readonly motif:string;readonly sections:readonly string[];
   readonly placeholderPhotoCount:number;readonly businessPhotoCount:number;readonly logoKind:"business"|"concept";

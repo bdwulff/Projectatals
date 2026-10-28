@@ -1,6 +1,6 @@
 import { ApiError, SESSION_EXPIRED_EVENT } from "./api";
 
-export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity" | "immersive";
+export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity" | "immersive" | "simple";
 export interface AcquisitionTemplate {
   id: DemoTemplateId;
   name: string;

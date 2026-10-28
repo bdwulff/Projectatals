@@ -5,7 +5,8 @@ export interface DiscoveryProgramSettings {
   area: string;
   industry: string;
   count: number;
-  templateId: "clarity" | "immersive";
+  templateId: "simple" | "clarity" | "immersive";
+  target?: "no_website";
   companyName: string;
   companyWebsite: string;
   timeZone: "Australia/Melbourne";
@@ -19,6 +20,9 @@ export interface DiscoveryProgramBusiness {
   logoIncluded: boolean;
   photoCount: number;
   recipientMissing: boolean;
+  contactEmail?: string | null;
+  contactSourceUrl?: string | null;
+  previewPath?: string | null;
 }
 export interface DiscoveryProgramReport {
   id: string;
@@ -39,6 +43,12 @@ export interface DiscoveryProgramReport {
   errors: string[];
   spokenSummary: string;
   fixture: boolean;
+  requestedCount?: number;
+  emailReadyCount?: number;
+  shortfallCount?: number;
+  sentCount?: number;
+  reviewPath?: string;
+  spreadsheetPath?: string;
 }
 export interface DiscoveryProgramSnapshot {
   mode: "live" | "fake";
@@ -49,6 +59,7 @@ export interface DiscoveryProgramSnapshot {
   reports: DiscoveryProgramReport[];
   run: { state: "idle" | "queued" | "running" | "completed" | "partial" | "failed" | "skipped" | "already_ran" | "blocked"; detail: string; jobId?: string };
   costs: { lovableCredits: 0; elevenLabsCredits: 0; llmTokens: 0; detail: string };
+  schedule?: { startHour: number; timeZone: "Australia/Melbourne" };
 }
 
 async function request(body?: unknown, path = ""): Promise<DiscoveryProgramSnapshot> {

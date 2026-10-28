@@ -9,6 +9,7 @@ import { installMailRoutes } from "./mail.js";
 import { installDiscoveryProgramRoutes } from "./discovery-program.js";
 import { installSiteRebuildRoutes } from "./site-rebuilds.js";
 import { installPublicBusinessAssetRoutes } from "./public-business-assets.js";
+import { installProspectPricingRoutes } from "./prospect-pricing.js";
 import { discoveryCommand } from "./discovery-commands.js";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -42,6 +43,7 @@ export function createApp(rt: Runtime, authOptions: OwnerAuthOptions = authOptio
   installDiscoveryProgramRoutes(app, rt, rt.discoveryProgram);
   installSiteRebuildRoutes(app, rt, rt.siteRebuilds);
   installPublicBusinessAssetRoutes(app, rt);
+  installProspectPricingRoutes(app, rt.prospectPricing);
   app.use("/api/dev/*", async (c, next) => rt.mode === "fake" ? next() : c.json({ error: "Not found." }, 404));
 
   app.get("/api/status", async (c) => {

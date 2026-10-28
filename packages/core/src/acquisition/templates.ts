@@ -1,5 +1,5 @@
 /** Curated, free commercial-use design references. No upstream template code or assets are embedded. */
-export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity" | "immersive";
+export type DemoTemplateId = "fieldwork" | "momentum" | "folio" | "clarity" | "immersive" | "simple";
 
 export interface DemoTemplate {
   readonly id: DemoTemplateId;
@@ -31,6 +31,12 @@ const source = (name: string, sourceUrl: string, licenceUrl: string) => Object.f
 });
 
 export const DEMO_TEMPLATES: readonly DemoTemplate[] = Object.freeze([
+  Object.freeze({
+    id: "simple", name: "Simple", category: "professional", implementation: "original_wulff_studio",
+    description: "A clean business introduction with a clear headline, verified services, licensed photography, concept branding and contact details.",
+    inspiration: source("Landwind", "https://github.com/themesberg/landwind", "https://github.com/themesberg/landwind/blob/main/LICENSE"),
+    attribution: "Original concise design and implementation by Wulff Digital. Embedded illustrative photographs and business assets retain their separate recorded source provenance; no upstream template code or assets copied.",
+  }),
   Object.freeze({
     id: "immersive", name: "Immersive", category: "professional", implementation: "original_wulff_studio",
     description: "Seven photograph-led sector compositions: cinematic automotive, lush gardens, editorial salons, athletic training, warm cafés, food-led restaurants and neutral professional services. Four licensed illustrative photographs, concept logos and working native exploration controls.",

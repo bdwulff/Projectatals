@@ -455,4 +455,60 @@ describe("client acquisition domain", () => {
     await expect(service.approveAndSend(record.id, record.draft!.contentHash, "Brandon")).rejects.toThrow(/lead is archived/);
     expect(service.publicPreview(rawDemo(record))).toBeNull();
   });
+  it("prepares a Simple introduction without an unpublished public link and adds it only after owner publication", () => {
+    const {service, send, store} = setup();
+    const record = service.prepare(add(service, 75).id, {templateId:"simple"});
+    expect(record.demo?.designBrief).toMatchObject({mode:"simple",placeholderPhotoCount:4});
+    expect(record.draft!.text).toContain("Would you like me to send you the preview?");
+    expect(record.draft!.text).not.toContain("/demos/");
+    expect(record.draft!.text).toContain("/unsubscribe/");
+    expect(record.draft!.text).not.toMatch(/(?:A\$|\$)\s*\d/);
+    const privatePath = store.getDoc<{publicPath:string}>("acquisition_demos",record.demo!.id)!.doc.publicPath;
+    expect(() => service.saveDraft(record.id,{expectedHash:record.draft!.contentHash,subject:record.draft!.subject,text:record.draft!.text+"\nhttps://jarvis.example.test"+privatePath})).toThrow(/Publish this concept/);
+    const edited = service.saveDraft(record.id, {expectedHash:record.draft!.contentHash,subject:"A personal introduction",text:record.draft!.text+"\nOwner-written note."});
+    expect(edited.draft!.subject).toBe("A personal introduction");
+    const files = service.sourceProject(record.id).files;
+    expect(Object.keys(files)).toHaveLength(8);
+    expect(files["src/App.tsx"]).toContain('mode');
+    const hash = edited.draft!.contentHash;
+    const published = service.publish(record.id, record.demo!.htmlHash, "Brandon");
+    expect(published.draft!.text).toContain("Owner-written note.");
+    expect(published.draft!.text).toContain("Website concept preview: https://jarvis.example.test/demos/");
+    expect(published.draft!.contentHash).not.toBe(hash);
+    expect(service.publicPreview(rawDemo(published))).not.toBeNull();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("updates a private sender signature without losing owner-edited subjects or message bodies", async () => {
+    const {service, send, store} = setup();
+    const record = service.prepare(add(service, 76).id, {templateId:"simple"});
+    const edited = service.saveDraft(record.id,{expectedHash:record.draft!.contentHash,subject:"My tailored subject",text:record.draft!.text+"\nA carefully written owner paragraph."});
+    const oldHash = edited.draft!.contentHash;
+    const contactDetails = sender.contactDetails+"\n0400 000 001";
+    service.saveSender({...sender,contactDetails}, "Brandon", {preserveDrafts:true});
+    const updated = store.getDoc<AcquisitionRecord>("acquisition_records", record.id)!.doc;
+    expect(updated.draft!.subject).toBe("My tailored subject");
+    expect(updated.draft!.text).toContain("A carefully written owner paragraph.");
+    expect(updated.draft!.text).toContain(contactDetails);
+    expect(updated.draft!.text).not.toContain("/demos/");
+    expect(updated.draft!.contentHash).not.toBe(oldHash);
+    expect(updated.draft!.version).toBe(edited.draft!.version+1);
+    await expect(service.approveAndSend(record.id,oldHash,"Brandon")).rejects.toThrow(/version changed/);
+    expect(service.ownerPreview(updated.demo!.id)!.html).not.toContain("0400 000 001");
+    expect(Object.values(service.sourceProject(updated.id).files).join("\n")).not.toContain("0400 000 001");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("preserves an owner-edited signature when no exact generated signature block can be replaced", () => {
+    const {service, store} = setup();
+    const record = service.prepare(add(service, 77).id, {templateId:"simple"});
+    const text = record.draft!.text.replace([sender.name,sender.organisation,sender.contactDetails].join("\n"),[sender.name,sender.organisation,"A personal closing",sender.contactDetails].join("\n"));
+    service.saveDraft(record.id,{expectedHash:record.draft!.contentHash,subject:record.draft!.subject,text});
+    service.saveSender({...sender,contactDetails:"Updated private contact details"}, "Brandon", {preserveDrafts:true});
+    const current = store.getDoc<AcquisitionRecord>("acquisition_records", record.id)!.doc;
+    expect(current.draft!.text).toContain("A personal closing");
+    expect(current.draft!.text).toContain("Updated private contact details");
+    expect(current.draft!.text).toContain("/unsubscribe/");
+  });
+
 });

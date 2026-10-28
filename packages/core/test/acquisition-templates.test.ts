@@ -44,7 +44,7 @@ describe("free-template concept renderer", () => {
     expect(result.html).toContain(`theme-${template.id}`);
     expect(result.externalAssets).toEqual([]);
     expect(result.html).not.toMatch(/<script\b|<iframe\b|<form\b|<input\b|<button\b|<link\b|<audio\b|<video\b/i);
-    if (template.id !== "immersive") expect(result.html).not.toMatch(/<img\b/);
+    if (template.id !== "immersive" && template.id !== "simple") expect(result.html).not.toMatch(/<img\b/);
     else expect(result.designBrief).toMatchObject({placeholderPhotoCount:4, businessPhotoCount:0});
     expect(result.html).not.toMatch(/\b(?:srcset|action|style|on\w+)\s*=|src="(?!data:image\/(?:png|jpeg|webp);base64,)|href\s*=\s*["'](?:mailto|tel|javascript|data):/i);
     expect(result.html).not.toMatch(/(?:[\d.]+[kKmM]?\+? reviews|rated 5|five.star|guarantee|trusted by \d|years of experience)/i);
@@ -114,7 +114,7 @@ describe("free-template concept renderer", () => {
 
   it.each(DEMO_TEMPLATES)("$name embeds sourced branding and photos with factual details and explicit provenance", template => {
     const result = renderDemoWebsite({ ...business, templateId: template.id, businessProfile: profile() });
-    if (template.id === "immersive") {
+    if (template.id === "immersive" || template.id === "simple") {
       expect(result.html).toContain('class="sp-business-logo im-logo"');
       expect(result.html).toContain('class="sp-gallery-photo"');
       expect(result.designBrief).toMatchObject({businessPhotoCount:1,placeholderPhotoCount:4,logoKind:"business"});

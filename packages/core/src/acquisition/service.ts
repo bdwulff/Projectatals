@@ -208,13 +208,13 @@ export class AcquisitionService {
     const priorDraft = record.draft ? structuredClone(record.draft) : null;
     const existingDemo = saved ? this.store.getDoc<InternalDemo>(DEMOS, id)?.doc : null;
     const rawToken = token(), expiresAt = existingDemo?.expiresAt ?? new Date(this.clock().getTime() + 14 * 86_400_000).toISOString();
-    const internal: InternalDemo = existingDemo ?? { id, leadId, html: rendered.html, csp: rendered.contentSecurityPolicy, htmlHash: sha(rendered.html), publicTokenHash: sha(rawToken), publicPath: `/demos/${rawToken}`, expiresAt, ...(["clarity", "immersive"].includes(rendered.templateId) ? { sourceFiles: exportDemoReactProject({ ...input, templateId: rendered.templateId }) } : {}) };
+    const internal: InternalDemo = existingDemo ?? { id, leadId, html: rendered.html, csp: rendered.contentSecurityPolicy, htmlHash: sha(rendered.html), publicTokenHash: sha(rawToken), publicPath: `/demos/${rawToken}`, expiresAt, ...(["clarity", "immersive", "simple"].includes(rendered.templateId) ? { sourceFiles: exportDemoReactProject({ ...input, templateId: rendered.templateId }) } : {}) };
     if (sha(internal.html) !== sha(rendered.html)) throw new AcquisitionError("The saved private rebuild differs from the requested design.");
     this.store.upsertDoc(DEMOS, id, internal);
     this.store.upsertDoc(TOKENS, internal.publicTokenHash, { demoId: id });
     record.demo = { id, templateId: rendered.templateId, templateName: rendered.templateName, htmlHash: internal.htmlHash, previewPath: `/api/acquisition/demos/${id}/preview`, publicPath: null, expiresAt, ...(rendered.designBrief ? { designBrief: rendered.designBrief } : {}) };
     if (options.preserveDraft && priorDraft && previousUrl) {
-      record.draft = { ...priorDraft, version: priorDraft.version + 1, text: priorDraft.text.split(previousUrl).join(this.url(internal.publicPath)), status: "draft", blockers: [], mailProviderIdentity: this.options.mailProviderIdentity?.() ?? "default" };
+      record.draft = { ...priorDraft, version: priorDraft.version + 1, text: priorDraft.text.split(previousUrl).join(rendered.templateId === "simple" ? "A private revised website concept is ready; reply if you would like the preview." : this.url(internal.publicPath)), status: "draft", blockers: [], mailProviderIdentity: this.options.mailProviderIdentity?.() ?? "default" };
       delete record.draft.approvalId; delete record.draft.providerRef; delete record.draft.acceptedAt;
       record.draft.contentHash = contentHash(this.payload(record)); this.save(record);
     } else this.compose(record);
@@ -264,11 +264,19 @@ export class AcquisitionService {
     return record;
   }
 
-  saveSender(input: AcquisitionSenderInput, ownerName: string): AcquisitionSenderInput {
+  saveSender(input: AcquisitionSenderInput, ownerName: string, options: { preserveDrafts?: boolean } = {}): AcquisitionSenderInput {
     required(ownerName, "Owner name", 120);
-    const sender = { name: required(input.name, "Sender name", 120), organisation: required(input.organisation, "Organisation", 160), email: emailValue(input.email, this.options.mode), contactDetails: required(input.contactDetails, "Sender contact details", 500) };
+    if (options.preserveDrafts !== undefined && typeof options.preserveDrafts !== "boolean") throw new AcquisitionError("Use an explicit preserve-drafts setting.", 400);
+    if (options.preserveDrafts && this.records().some(record => record.draft?.status === "submitting")) throw new AcquisitionError("An email submission is active. Update the sender after it finishes.");
+    const previous = this.sender();
+    const sender = { name: required(input.name, "Sender name", 120), organisation: required(input.organisation, "Organisation", 160), email: emailValue(input.email, this.options.mode), contactDetails: requiredBody(input.contactDetails, 500) };
     this.store.setMemory("acquisition.sender", sender);
-    for (const record of this.records()) if (record.demo && record.draft && !TERMINAL.has(record.draft.status) && record.draft.status !== "submitting") this.compose(record);
+    for (const record of this.records()) if (record.demo && record.draft && !TERMINAL.has(record.draft.status) && record.draft.status !== "submitting") {
+      if (options.preserveDrafts) {
+        if (record.draft.status === "cancelled") continue;
+        this.refreshDraftSignature(record, previous, this.sender());
+      } else this.compose(record);
+    }
     this.atlas.audit.record({ actor: "owner", action: "acquisition.sender.saved", business: "wulff_studio", outcome: "completed", detail: { email: sender.email } });
     return sender;
   }
@@ -309,7 +317,9 @@ export class AcquisitionService {
     const draft = record.draft!, internal = this.internal(record), sender = this.sender();
     const subject = required(input.subject, "Email subject", 180), text = requiredBody(input.text, 9000);
     const unsubscribeUrl = this.unsubscribeUrl(record), demoUrl = this.url(internal.publicPath);
-    if (![demoUrl, unsubscribeUrl, sender.name, sender.organisation, sender.contactDetails].every(value => value && text.includes(value))) throw new AcquisitionError("Keep the exact demo link, unsubscribe link and sender identity/contact details in the email.", 400);
+    const requiresDemoLink = record.demo?.templateId !== "simple" || Boolean(internal.publishedAt);
+    if (record.demo?.templateId === "simple" && !internal.publishedAt && text.includes(demoUrl)) throw new AcquisitionError("Publish this concept before putting its public link in an email.", 400);
+    if (![...(requiresDemoLink ? [demoUrl] : []), unsubscribeUrl, sender.name, sender.organisation, sender.contactDetails].every(value => value && text.includes(value))) throw new AcquisitionError("Keep the exact demo link, unsubscribe link and sender identity/contact details in the email.", 400);
     draft.subject = subject; draft.text = text; draft.version += 1; draft.status = "draft"; draft.blockers = []; delete draft.approvalId;
     delete draft.providerRef; delete draft.acceptedAt;
     draft.contentHash = contentHash(this.payload(record));
@@ -346,6 +356,10 @@ export class AcquisitionService {
       this.atlas.approvals.decide(approval.id, "approve", required(ownerName, "Owner name", 120));
       this.atlas.approvals.consume(`acquisition-publish:${demo.id}`, payload);
       this.activate(record, demo);
+      if (record.demo?.templateId === "simple" && record.draft && !TERMINAL.has(record.draft.status) && !["submitting", "cancelled"].includes(record.draft.status) && !record.draft.text.includes(this.url(demo.publicPath))) {
+        record.draft.text += `\n\nWebsite concept preview: ${this.url(demo.publicPath)}`;
+        this.invalidateDraft(record);
+      }
     }
     return record;
   }
@@ -373,7 +387,7 @@ export class AcquisitionService {
   ownerPreview(demoId: string): { html: string; csp: string } | null { const demo = this.store.getDoc<InternalDemo>(DEMOS, demoId)?.doc; const lead = demo ? this.store.getDoc<AcquisitionRecord>(RECORDS, demo.leadId)?.doc : null; return demo && lead && !lead.archivedAt ? { html: demo.html, csp: demo.csp } : null; }
   sourceProject(leadId: string): { name: string; files: Readonly<Record<string, string>> } {
     const record = this.require(leadId);
-    if (!record.demo || !["clarity", "immersive"].includes(record.demo.templateId)) throw new AcquisitionError("Build a Clarity or Immersive concept first to download its matching React project.");
+    if (!record.demo || !["clarity", "immersive", "simple"].includes(record.demo.templateId)) throw new AcquisitionError("Build a Simple, Clarity or Immersive concept first to download its matching React project.");
     const demo = this.internal(record);
     if (!demo.sourceFiles || sha(demo.html) !== record.demo.htmlHash) throw new AcquisitionError("Rebuild this concept to create its matching source download.");
     return { name: record.businessName, files: demo.sourceFiles };
@@ -464,9 +478,30 @@ export class AcquisitionService {
     const sender = this.sender(), demo = this.internal(record), prior = record.draft;
     const to = record.contact?.email ?? ""; this.ensureUnsubscribe(record, to);
     const subject = `A website concept for ${record.businessName}`;
-    const text = [`Hi ${record.businessName} team,`, "", `I’m ${sender.name || "Brandon"} from ${sender.organisation || "Wulff Studio"}. I came across your business while researching ${record.location}.`, `I put together an independent website concept showing a possible direction for your online presence:`, "", this.url(demo.publicPath), "", "It’s an unsolicited design concept, not your official website. If the direction interests you, you can reply and we can discuss what would be useful for your business. There’s no commitment.", "", sender.name, sender.organisation, sender.contactDetails, "", `Prefer no further contact? Unsubscribe here: ${this.unsubscribeUrl(record)}`].join("\n");
+    const text = record.demo?.templateId === "simple" ? this.simpleIntroduction(record, sender, demo) : [`Hi ${record.businessName} team,`, "", `I’m ${sender.name || "Brandon"} from ${sender.organisation || "Wulff Studio"}. I came across your business while researching ${record.location}.`, `I put together an independent website concept showing a possible direction for your online presence:`, "", this.url(demo.publicPath), "", "It’s an unsolicited design concept, not your official website. If the direction interests you, you can reply and we can discuss what would be useful for your business. There’s no commitment.", "", sender.name, sender.organisation, sender.contactDetails, "", `Prefer no further contact? Unsubscribe here: ${this.unsubscribeUrl(record)}`].join("\n");
     record.draft = { id: prior?.id ?? newId("draft"), version: (prior?.version ?? 0) + 1, from: sender.email, to, subject, text, contentHash: "", status: "draft", blockers: [], mailProviderIdentity: this.options.mailProviderIdentity?.() ?? "default" };
     record.draft.contentHash = contentHash(this.payload(record)); this.save(record);
+  }
+  private simpleIntroduction(record: AcquisitionRecord, sender: AcquisitionSenderInput, demo: InternalDemo): string {
+    const preview = demo.publishedAt ? `You can view the independent concept here: ${this.url(demo.publicPath)}` : "I’ve prepared a private website concept for your business. Would you like me to send you the preview?";
+    return [`Hi ${record.businessName} team,`, "", `I’m ${sender.name || "Brandon"} from ${sender.organisation || "Wulff Studio"}. I came across your business in ${record.location}.`, "", preview, "", "It’s an unsolicited design idea, not your official website, and there’s no commitment.", "", sender.name, sender.organisation, sender.contactDetails, "", `Prefer no further contact? Unsubscribe here: ${this.unsubscribeUrl(record)}`].join("\n");
+  }
+  private invalidateDraft(record: AcquisitionRecord): void {
+    const draft = record.draft!;
+    draft.version += 1; draft.status = "draft"; draft.blockers = [];
+    delete draft.approvalId; delete draft.providerRef; delete draft.acceptedAt;
+    draft.contentHash = contentHash(this.payload(record)); this.save(record);
+  }
+  private refreshDraftSignature(record: AcquisitionRecord, previous: AcquisitionSenderInput, next: AcquisitionSenderInput): void {
+    const draft = record.draft!, oldSignature = [previous.name, previous.organisation, previous.contactDetails].join("\n"), signature = [next.name, next.organisation, next.contactDetails].join("\n");
+    if (draft.text.includes(oldSignature)) draft.text = draft.text.replace(oldSignature, signature);
+    else {
+      const footer = `Prefer no further contact? Unsubscribe here: ${this.unsubscribeUrl(record)}`;
+      draft.text = draft.text.includes(footer) ? draft.text.replace(footer, `${signature}\n\n${footer}`) : `${draft.text}\n\n${signature}`;
+    }
+    const previousIntroduction = `I’m ${previous.name} from ${previous.organisation}.`;
+    draft.text = draft.text.replace(previousIntroduction, `I’m ${next.name} from ${next.organisation}.`);
+    draft.from = next.email; this.invalidateDraft(record);
   }
   private payload(record: AcquisitionRecord) {
     const draft = record.draft; if (!draft) throw new AcquisitionError("Prepare a demo and email first.");

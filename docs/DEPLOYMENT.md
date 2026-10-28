@@ -1,6 +1,54 @@
 # Jarvis hosted deployment
 
-> **Photographic showcase deployed:** Railway deployment
+> **Daily manual outreach deployed and activated:** Railway deployment
+> `dc896841-d318-435f-8e18-2d546102fa33` reached **SUCCESS** on 28 October 2026.
+> The live dated report contains 20/20 new Simple demos and sourced email drafts,
+> 80 decoded embedded photo placements and 20 source ZIPs with valid CRCs. The
+> master pricing/prospect workbook contains 47 rows and opens with openpyxl.
+> All 298/298 hosted UI checks passed at 1440px and 390px, and the ready-list
+> notification persisted. No client emails, public concepts or
+> customer-quote changes occurred. See [DAILY-OUTREACH.md](DAILY-OUTREACH.md).
+
+Current component validation totals 596 passing tests: 244 core, 303 API, seven
+MCP, 24 local-agent and 18 UI. The full 594-test workspace run passed before two
+additional API source guards; the final 303-test API suite also passed. The whole
+production build and final API build passed. Simple rendering/export checks
+passed 330/330, including six matching editable React projects that built. Local UI
+checks passed 79/79 at 1440px, 390px and 320px. Independent workbook checks passed 10/10,
+alongside 16 backend pricing tests. Hosted UI checks passed 298/298 at 1440px and
+390px: all 20 previews loaded four distinct photos, with no runtime errors or
+external calls, and the verification session was revoked.
+
+The activated program is enabled for 20 businesses per Melbourne day, using
+Simple demos, no-own-website qualification and Melbourne/south-east scope. Server
+research starts on the first worker tick after 7 am Melbourne time. An enabled
+flexible daily 9 am ChatGPT reminder was confirmed from 29 October 2026. These are
+verified settings, not proof of a future scheduled research run or reminder.
+
+Today's 20 contacts came from explicit reviewed public-source research: 19 from
+western Melbourne/Wyndham and one from Cranbourne West. The previous six demo
+prospects were excluded. All 20 introductions include the privately configured
+owner phone but no internal price or unpublished demo link. All 20 source ZIPs
+exclude that owner phone. Nineteen prior editable drafts retained their text
+apart from the authorised sender-identity/signature update. Today's starting
+internal prices are 13 at A$699 and seven at A$999; customer quotes were unchanged.
+The 47-row master workbook includes current and historical prospects, with
+separate Pricing and Prospects sheets and optional Email drafts. A separate
+owner-only handoff workbook contains only the 20 new daily rows on Pricing and
+Prospects, with no Email drafts sheet; a separate ZIP holds 20 `.eml` files from
+the verified saved text. These download snapshots stay outside Git.
+
+A repeat Run created no additional records or provider searches. The persisted
+notification reads **Daily client list: 20 of 20 ready** and links to private review
+and spreadsheet paths. This verifies the dashboard alert, not external email,
+SMS or phone delivery. No prospect message, publication, model generation or paid
+voice request was made. Installed device speech still requires foreground
+activation; physical playback remains unverified. Existing hosting charges apply.
+Private activation evidence is `/workspace/scratch/daily-outreach-live-report.json`.
+
+## Previous verified photographic showcase release
+
+> **Previous photographic showcase deployed:** Railway deployment
 > `c31f974a-5133-48e7-a7c2-ae5fe4865dc6` reached **SUCCESS** on 28 October 2026.
 > All 537 workspace tests, the production build, 330 renderer/export checks,
 > 51 local review-UI browser checks, 128 hosted UI checks and 227 hosted HTTP/data
@@ -18,7 +66,7 @@ editable components, CSS and provenance. All six generated source projects passe
 type checks and production builds; native menus, service panels, galleries and
 anchor links were exercised in the browser checks.
 
-Current workspace validation: 231 core, 260 API, seven MCP, 24 local-agent and
+Photographic release validation: 231 core, 260 API, seven MCP, 24 local-agent and
 15 UI tests. The 227/227 hosted checks verified the exact deployed JavaScript/CSS
 bytes, protected access, decoded image payloads, matching source imagery,
 owner-secret exclusion, six new demo versions and preserved owner-edited drafts.

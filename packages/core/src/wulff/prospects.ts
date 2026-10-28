@@ -50,15 +50,24 @@ export class ProspectService {
 
   constructor(private readonly store: Store, private readonly audit: AuditLog) {}
 
-  private normaliseKey(businessName: string, website: string | null): string {
-    const host = website ? website.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase() : "";
-    return host || businessName.trim().toLowerCase().replace(/\s+/g, " ");
+  private normaliseKey(input: Pick<Prospect, "businessName" | "location" | "website">): string {
+    const normal = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
+    const identity = `${normal(input.businessName)}|${normal(input.location).replace(/\b(?:victoria|vic|australia)\b/g, "").trim().replace(/\s+/g, " ")}`;
+    if (!input.website) return `business:${identity}`;
+    try {
+      const url = new URL(input.website), host = url.hostname.toLowerCase().replace(/^www\./, "");
+      const shared = /(?:^|\.)(?:facebook\.com|fb\.com|instagram\.com|linkedin\.com|tiktok\.com|youtube\.com|findglocal\.com|truelocal\.com\.au|yellowpages\.com\.au|localsearch\.com\.au|hotfrog\.com(?:\.au)?|yelp\.com(?:\.au)?|wordofmouth\.com\.au|aussieweb\.com\.au|businesslistings\.net\.au|fresha\.com|bookwell\.com\.au|google\.com(?:\.au)?|maps\.app\.goo\.gl)$/.test(host);
+      if (!shared) return `website:${host}`;
+      // Social networks and directories host many businesses, including category/root pages.
+      // Name and locality remain stable across tracking URLs, mobile hosts and profile-page changes.
+      return `business:${identity}`;
+    } catch { return `business:${identity}`; }
   }
 
-  /** Create or merge (dedupe by website host, else by name). */
+  /** Company domains merge by host; shared profiles and absent websites use the normalised business name and locality. */
   upsert(input: Omit<Prospect, "id" | "createdAt" | "updatedAt" | "stage" | "outreach" | "evidence" | "qualification" | "contactEligibility"> & Partial<Pick<Prospect, "stage" | "evidence" | "qualification" | "contactEligibility" | "fixture" | "suggestedQuote">>): { prospect: Prospect; created: boolean } {
-    const key = this.normaliseKey(input.businessName, input.website);
-    const existing = this.list().find((p) => this.normaliseKey(p.businessName, p.website) === key);
+    const key = this.normaliseKey(input);
+    const existing = this.list().find((p) => this.normaliseKey(p) === key);
     if (existing) {
       const seen = new Set(existing.evidence.map((e) => `${e.observation}|${e.sourceUrl}`));
       for (const e of input.evidence ?? []) if (!seen.has(`${e.observation}|${e.sourceUrl}`)) existing.evidence.push(e);
