@@ -17,6 +17,15 @@ function dateLabel(value: string | null, includeTime = false): string {
   return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", ...(includeTime ? { hour: "numeric", minute: "2-digit" } as const : {}), timeZone: "Australia/Melbourne" }).format(date) : "Date unavailable";
 }
 const pending = (row: ManualOutreachRow) => row.stages.find(stage => stage.ready && !stage.sentAt) ?? row.stages.find(stage => !stage.sentAt) ?? row.stages[0];
+const OPEN_READY_EMAILS_EVENT = "atlas:open-ready-emails";
+export function focusManualOutreachQueue() {
+  const section = document.getElementById("manual-outreach");
+  const heading = document.getElementById("manual-outreach-title");
+  if (!section) return;
+  window.dispatchEvent(new Event(OPEN_READY_EMAILS_EVENT));
+  heading?.focus({ preventScroll: true });
+  section.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
 function inView(row: ManualOutreachRow, view: QueueView): boolean {
   if (view === "review") return !row.eligible || row.status !== "active";
   if (!row.eligible || row.status !== "active") return false;
@@ -46,6 +55,16 @@ export function ManualOutreach({ refreshKey }: { refreshKey?: string }) {
     return () => { mounted.current = false; serial.current++; window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); };
   }, [load]);
   useEffect(() => { void load(); }, [load, refreshKey]);
+  useEffect(() => {
+    const showReady = () => setView("ready");
+    const openFromLink = () => {
+      const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+      if (query.get("outreach") === "ready") window.requestAnimationFrame(focusManualOutreachQueue);
+    };
+    window.addEventListener(OPEN_READY_EMAILS_EVENT, showReady);
+    openFromLink(); window.addEventListener("hashchange", openFromLink);
+    return () => { window.removeEventListener("hashchange", openFromLink); window.removeEventListener(OPEN_READY_EMAILS_EVENT, showReady); };
+  }, []);
   const update = async (row: ManualOutreachRow, action: OutreachAction, stage?: OutreachStageId) => {
     if (mutating.current) return;
     mutating.current = true; serial.current++; setBusy(row.leadId); setError(null);
@@ -62,10 +81,10 @@ export function ManualOutreach({ refreshKey }: { refreshKey?: string }) {
   const rows = snapshot?.rows ?? [], shown = rows.filter(row => inView(row, view));
   const readyCount = rows.filter(row => inView(row, "ready")).length, followCount = rows.filter(row => inView(row, "followups")).length, reviewCount = rows.filter(row => inView(row, "review")).length;
 
-  return <section className="mo-workspace" aria-labelledby="manual-outreach-title">
-    <header className="mo-heading"><div><p className="mo-eyebrow">YOUR NEXT CONVERSATIONS</p><h3 id="manual-outreach-title">Review it. Open it. Make it yours.</h3><p>Your researched businesses, website previews and three email drafts in one place.</p></div><button type="button" className="mo-icon-button" aria-label="Refresh daily email queue" disabled={loading || Boolean(busy)} onClick={() => void load()}><RefreshCw size={17} aria-hidden /></button></header>
-    <div className="mo-summary"><div><strong>{snapshot?.counts.ready ?? 0}</strong><span>first emails ready</span></div><div><strong>{snapshot?.counts.due ?? 0}</strong><span>follow-ups due</span></div><div><strong>{snapshot?.counts.newToday ?? 0}<small> / {snapshot?.schedule.target ?? 20}</small></strong><span>new prospects today</span></div></div>
-    <p className="mo-schedule"><Clock3 size={14} aria-hidden /><span>{snapshot?.schedule.enabled ? `Daily preparation runs after ${String(snapshot.schedule.startHour).padStart(2, "0")}:00 Melbourne time.` : "Daily preparation is paused. Enable the daily run above to line up new businesses."} {snapshot && snapshot.counts.shortfall > 0 ? `${snapshot.counts.shortfall} below today’s target; earlier unsent prospects remain available.` : ""}</span></p>
+  return <section className="mo-workspace" aria-labelledby="manual-outreach-title" id="manual-outreach">
+    <header className="mo-heading"><div><p className="mo-eyebrow">YOUR NEXT CONVERSATIONS</p><h3 id="manual-outreach-title" tabIndex={-1}>Review it. Open it. Make it yours.</h3><p>Your researched businesses, website previews and three email drafts in one place.</p></div><button type="button" className="mo-icon-button" aria-label="Refresh daily email queue" disabled={loading || Boolean(busy)} onClick={() => void load()}><RefreshCw size={17} aria-hidden /></button></header>
+    <div className="mo-summary"><div><strong>{snapshot?.counts.ready ?? 0}</strong><span>first emails ready</span></div><div><strong>{snapshot?.counts.due ?? 0}</strong><span>follow-ups due</span></div><div><strong>{snapshot?.counts.newToday ?? 0}<small> / {snapshot?.schedule.target ?? 20}</small></strong><span>lined up today</span></div></div>
+    <p className="mo-schedule"><Clock3 size={14} aria-hidden /><span>{snapshot?.schedule.enabled ? `Daily preparation runs after ${String(snapshot.schedule.startHour).padStart(2, "0")}:00 Melbourne time.` : "Daily preparation is paused. Open Daily research settings and previous runs below to enable it."} {snapshot && snapshot.counts.shortfall > 0 ? `${snapshot.counts.shortfall} below today’s target; earlier unsent prospects remain available.` : ""}</span></p>
     <div className="mo-how"><Mail size={18} aria-hidden /><p><strong>One tap opens your email app.</strong> Check a draft, save your review, then open it with the recipient, subject, message and link filled in. You choose the sending account and tap Send in your email app.</p></div>
     {snapshot?.mode === "fake" && <p className="mo-message mo-message--warning"><CircleAlert size={16} aria-hidden />Fictional test queue. These businesses and drafts are test records.</p>}
     {error && <p className="mo-message mo-message--error" role="alert"><CircleAlert size={16} aria-hidden /><span>{error} <button type="button" onClick={() => void load()}>Refresh queue</button></span></p>}
