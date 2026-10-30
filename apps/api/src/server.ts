@@ -5,6 +5,7 @@ import { authOptionsFromEnv } from "./auth.js";
 import { startBackgroundWorker } from "./background.js";
 import { buildRuntime } from "./runtime.js";
 import { existsSync } from "node:fs";
+import { installScenicPreviewRoutes } from "./scenic-previews.js";
 
 const bindHost = process.env.ATLAS_BIND_HOST ?? "127.0.0.1";
 const loopback = bindHost === "127.0.0.1" || bindHost === "::1";
@@ -14,6 +15,7 @@ if (!loopback) {
 }
 const rt = buildRuntime();
 const app = createApp(rt, { ...authOptionsFromEnv(process.env), localOnlyServer: loopback });
+installScenicPreviewRoutes(app);
 const uiDist = new URL("../../command-centre/dist/", import.meta.url).pathname;
 if (existsSync(uiDist)) {
   app.use("/*", serveStatic({ root: uiDist.replace(process.cwd() + "/", "") }));

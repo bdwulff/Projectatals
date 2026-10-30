@@ -3,6 +3,7 @@ import { ArrowDownToLine, ArrowRight, ArrowUpRight, CheckCheck, ChevronDown, Cir
 import { acquisition, type AcquisitionContact, type AcquisitionMailProviders, type AcquisitionMailProviderId, type AcquisitionRecord, type AcquisitionSender, type AcquisitionSnapshot, type AddAcquisitionLead, type ContactBasis, type DemoTemplateId, type OutreachStatus } from "../acquisition-client";
 import { Pipeline } from "./Pipeline";
 import { DiscoveryProgram } from "../components/DiscoveryProgram";
+import { focusManualOutreachQueue } from "../components/ManualOutreach";
 import { SiteRebuilds } from "../components/SiteRebuilds";
 import { demoMedia } from "../design-media";
 import { copyEmail, downloadEmail } from "../email-export";
@@ -93,7 +94,7 @@ export function Acquisition({ onDataChanged }: { onDataChanged?: () => void }) {
   };
 
   return <div className="acq-shell">
-    <header className="acq-header acq-header--compact"><div><div className="acq-eyebrow"><Sparkles size={12} aria-hidden /> Wulff Digital / Studio</div><h1>Your prospects. <span>Ready to review.</span></h1><p>Daily local research, simple website demos and drafts for you to email.</p></div><div className="acq-header-actions"><button type="button" className="acq-btn acq-btn--quiet" onClick={openSender}><Settings2 size={13} aria-hidden />Sender settings</button><button type="button" className="acq-btn acq-icon-button" aria-label="Refresh client acquisition" title="Refresh" onClick={() => void load()} disabled={loading || Boolean(busy)}><RefreshCw size={14} className={loading ? "acq-spinner" : ""} aria-hidden /></button></div></header>
+    <header className="acq-header acq-header--compact"><div><div className="acq-eyebrow"><Sparkles size={12} aria-hidden /> Wulff Digital / Studio</div><h1>Your prospects. <span>Ready to review.</span></h1><p>Daily local research, website previews and email drafts for you to send.</p></div><div className="acq-header-actions"><button type="button" className="acq-btn acq-btn--primary" onClick={focusManualOutreachQueue}><Mail size={14} aria-hidden />Open ready emails</button><button type="button" className="acq-btn acq-btn--quiet" onClick={openSender}><Settings2 size={13} aria-hidden />Sender settings</button><button type="button" className="acq-btn acq-icon-button" aria-label="Refresh client acquisition" title="Refresh" onClick={() => void load()} disabled={loading || Boolean(busy)}><RefreshCw size={14} className={loading ? "acq-spinner" : ""} aria-hidden /></button></div></header>
 
     {snapshot?.mode === "fake" && <div className="acq-alert"><CircleAlert size={16} aria-hidden /><span>Fictional test mode. Test records and simulated email results are not live businesses or real delivery.</span></div>}
     {error && <div className="acq-alert" role="alert"><CircleAlert size={16} aria-hidden /><span>{error}</span></div>}

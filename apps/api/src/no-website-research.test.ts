@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import type { ResearchLookupResult } from "@atlas/core";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildRuntime, type Runtime } from "./runtime.js";
-import { NoWebsiteResearch, noWebsiteQualificationKey, type NoWebsiteResearchInput, type NoWebsiteQualification } from "./no-website-research.js";
+import { NoWebsiteResearch, noWebsiteQualificationKey, planNoWebsiteDiscovery, type NoWebsiteResearchInput, type NoWebsiteQualification } from "./no-website-research.js";
 
 const runtimes: Runtime[] = [];
 const directories: string[] = [];
@@ -22,6 +23,7 @@ function candidate(name = "Acme Local Gardens", email = "acme@businessmail.com",
   return { title: `${name} | Facebook`, url: "https://www.facebook.com/" + name.replace(/\W/g, "").toLowerCase(), description: `${name} offers ${industry} in Berwick, Victoria. Contact email: ${email}. Public business source for review.`, source: "Tavily", retrievedAt: initial().toISOString(), trust: "untrusted_web_content" };
 }
 const sector = (query: string) => query.match(/"([^"]+)" "email"$/)?.[1] ?? "garden maintenance";
+const card = (input: Pick<ResearchLookupResult, "title" | "url" | "description">): ResearchLookupResult => ({ ...candidate(), ...input });
 function addSeed(s: ReturnType<typeof setup>, change: { name?: string; location?: string; email?: string; source?: string; website?: string } = {}) {
   const source = change.source ?? "https://www.wyndham.vic.gov.au/directory/acme-local-gardens";
   const r = s.rt.acquisition.addLead({ businessName: change.name ?? "Acme Local Gardens", location: change.location ?? "Werribee, Victoria", industry: "garden maintenance", sourceUrl: source, contactEmail: change.email ?? "acme@businessmail.com", contactSourceUrl: source, observation: "Owner-reviewed public directory facts. Website absence remains qualified.", ...(change.website ? { website: change.website } : {}) });
@@ -31,6 +33,26 @@ function addSeed(s: ReturnType<typeof setup>, change: { name?: string; location?
 afterEach(() => { for (const rt of runtimes.splice(0)) rt.atlas.deps.store.close(); for (const path of directories.splice(0)) rmSync(path, { recursive: true, force: true }); });
 
 describe("bounded no-independent-website daily source research", () => {
+  it("keeps every planned council search inside its municipality and Fresha searches inside relevant sectors", () => {
+    const councils: Record<string, string[]> = { "wyndham.vic.gov.au": ["Werribee", "Hoppers Crossing", "Tarneit", "Truganina", "Point Cook", "Wyndham Vale"], "casey.vic.gov.au": ["Cranbourne", "Cranbourne West", "Berwick", "Narre Warren"], "greaterdandenong.vic.gov.au": ["Dandenong", "Noble Park", "Springvale", "Keysborough"], "frankston.vic.gov.au": ["Frankston"] };
+    let municipal = 0, appointment = 0;
+    for (let day = 1; day <= 31; day++) for (let index = 0; index < 40; index++) {
+      const planned = planNoWebsiteDiscovery({ area: "Melbourne and south-east Melbourne, Victoria", day: `2026-10-${String(day).padStart(2, "0")}`, index });
+      if (councils[planned.source]) { municipal++; expect(councils[planned.source]).toContain(planned.locality); }
+      if (planned.source === "fresha.com") { appointment++; expect(["hair salon", "personal training"]).toContain(planned.industry); }
+      expect(planned.query).toBe(`site:${planned.source} "${planned.locality}" "${planned.industry}" "email"`);
+    }
+    expect(municipal).toBeGreaterThan(0); expect(appointment).toBeGreaterThan(0);
+  });
+
+  it("retains requested locality coverage with generic-source fallback and fresh next-day rotation", () => {
+    const first = Array.from({ length: 40 }, (_, index) => planNoWebsiteDiscovery({ area: "Officer, Pakenham, Victoria", day: "2026-10-30", index }));
+    expect(new Set(first.map(p => p.locality))).toEqual(new Set(["Officer", "Pakenham"]));
+    expect(first.every(p => !p.source.endsWith(".gov.au"))).toBe(true);
+    const next = Array.from({ length: 40 }, (_, index) => planNoWebsiteDiscovery({ area: "Officer, Pakenham, Victoria", day: "2026-10-31", index }));
+    expect(first.map(p => p.query)).not.toEqual(next.map(p => p.query));
+  });
+
   it("resumes to twenty genuinely new email-present businesses without any send, publishing or enrichment", async () => {
     const s = setup(); let batch = 0;
     s.lookup.mockImplementation(async ({ query }) => query.includes('"email"') ? Array.from({ length: 10 }, (_, i) => { const n = ++batch; return candidate(`Local Business ${n}`, `business${n}@businessmail.com`, sector(query)); }) : []);
@@ -90,6 +112,36 @@ describe("bounded no-independent-website daily source research", () => {
     ] : []);
     const r = await s.service.step(input({ count: 1 })); expect(r.state).toBe("completed"); expect(r.leadIds).toHaveLength(1); expect(r.exclusions.nonBusiness).toBe(1);
     expect((await s.rt.acquisition.snapshot()).records[0]!.sourceUrl).toContain("wyndham.vic.gov.au/business-directory/acme");
+  });
+
+  it("accepts a single council entry’s matching title and slug when its contact excerpt does not repeat the name", async () => {
+    const s = setup();
+    s.lookup.mockImplementation(async ({ query }) => query.includes('"email"') ? [card({ title: "Fictional Blossom Gardens | Business Directory | Wyndham City", url: "https://www.wyndham.vic.gov.au/directory/fictional-blossom-gardens-0", description: `${sector(query)} in Berwick, Victoria. Phone 0400 000 000. E-Mail: fictional-blossom@businessmail.com. Council contact mail@wyndham.vic.gov.au.` })] : []);
+    const result = await s.service.step(input({ count: 1 }));
+    expect(result.state).toBe("completed"); expect(result.leadIds).toHaveLength(1); expect(s.lookup).toHaveBeenCalledTimes(2);
+    const saved = (await s.rt.acquisition.snapshot()).records[0]!; expect(saved.businessName).toBe("Fictional Blossom Gardens"); expect(saved.contact!.email).toBe("fictional-blossom@businessmail.com"); expect(saved.observation).toContain("not proof that none exists");
+  });
+
+  it("retains duplicate and owned-website checks after an individual title-and-slug match", async () => {
+    const s = setup(); s.rt.atlas.deps.store.upsertDoc("manual_outreach_seeds", "manual_fictional_existing", { businessName: "Fictional Blossom Gardens", contactEmail: "fictional-blossom@businessmail.com" });
+    s.lookup.mockImplementation(async ({ query }) => query.includes('"email"') ? [card({ title: "Fictional Blossom Gardens", url: "https://www.wyndham.vic.gov.au/directory/fictional-blossom-gardens", description: `${sector(query)} in Berwick, Victoria. fictional-blossom@businessmail.com` })] : []);
+    expect((await s.service.step(input())).leadIds).toEqual([]); expect(s.lookup.mock.calls.every(([request]) => request.query.includes('"email"'))).toBe(true);
+    const another = setup(); another.lookup.mockImplementation(async ({ query }) => query.includes('"email"') ? [card({ title: "Fictional New Gardens", url: "https://www.wyndham.vic.gov.au/directory/fictional-new-gardens", description: `${sector(query)} in Berwick, Victoria. new-gardens@businessmail.com` })] : [card({ title: "Fictional New Gardens", url: "https://fictionalnewgardens.com.au", description: "Fictional official business website for this isolated test." })]);
+    const rejected = await another.service.step(input({ count: 1 })); expect(rejected.leadIds).toEqual([]); expect(rejected.exclusions.ownWebsite).toBe(1);
+  });
+
+  it("does not treat generic, mismatched, shared, ambiguous or multi-business cards as title-only identity", async () => {
+    const s = setup();
+    s.lookup.mockImplementation(async ({ query }) => query.includes('"email"') ? [
+      card({ title: "Directory Search", url: "https://www.wyndham.vic.gov.au/directory/search", description: `${sector(query)} in Berwick. first@businessmail.com` }),
+      card({ title: "Fictional Wrong Gardens", url: "https://www.wyndham.vic.gov.au/directory/different-business", description: `${sector(query)} in Berwick. second@businessmail.com` }),
+      card({ title: "Fictional Supplier Gardens", url: "https://www.casey.vic.gov.au/provider-directory-old-cheese-factory", description: `${sector(query)} in Berwick. third@businessmail.com` }),
+      card({ title: "Fictional Shared Gardens | Another Fictional Business", url: "https://www.wyndham.vic.gov.au/directory/fictional-shared-gardens", description: `${sector(query)} in Berwick. fourth@businessmail.com` }),
+      card({ title: "Fictional Related Gardens", url: "https://www.wyndham.vic.gov.au/directory/fictional-related-gardens", description: `${sector(query)} in Berwick. Related businesses: Another Fictional Business. fifth@businessmail.com` }),
+      card({ title: "Fictional Ambiguous Gardens", url: "https://www.wyndham.vic.gov.au/directory/fictional-ambiguous-gardens", description: `${sector(query)} in Berwick. sixth@businessmail.com and seventh@businessmail.com` }),
+    ] : []);
+    const result = await s.service.step(input()); expect(result.leadIds).toEqual([]); expect(s.lookup.mock.calls.every(([request]) => request.query.includes('"email"'))).toBe(true);
+    expect(result.exclusions.missingEmail).toBeGreaterThan(0); expect(result.exclusions.nonBusiness).toBeGreaterThan(0); expect(result.exclusions.unverified).toBeGreaterThan(0);
   });
 
   it("does not guess missing emails or choose between ambiguous recipients", async () => {
@@ -174,6 +226,24 @@ describe("bounded no-independent-website daily source research", () => {
   it.each(["sent", "replied", "follow_up", "closed", "do_not_contact"])("excludes the private manual-email ledger status %s", status => {
     const s = setup(); const r = addSeed(s); s.rt.atlas.deps.store.upsertDoc("prospect_pricing", r.id, { manualEmailStatus: status });
     expect(s.service.seed({ ...input({ area: "Melbourne", count: 1 }), leadIds: [r.id] }).leadIds).toEqual([]);
+  });
+
+  it("excludes previously imported manual prospects by name or email before spending a website lookup", async () => {
+    const s = setup();
+    s.rt.atlas.deps.store.upsertDoc("manual_outreach_seeds", "manual_fictional_prior", { businessName: "Already Reviewed Local Business", contactEmail: "prior@businessmail.com" });
+    s.lookup.mockImplementation(async ({ query }) => query.includes('"email"') ? [candidate("Already Reviewed Local Business", "changed@businessmail.com", sector(query)), candidate("Different Local Business", "prior@businessmail.com", sector(query))] : []);
+    const result = await s.service.step(input());
+    expect(result.leadIds).toEqual([]); expect(result.exclusions.duplicate).toBe(4);
+    expect(s.lookup.mock.calls.every(([request]) => request.query.includes('"email"'))).toBe(true);
+  });
+
+  it("keeps globally suppressed email addresses out of new discovery and explicit seed imports", async () => {
+    const s = setup(), address = "stopped@businessmail.com";
+    s.rt.atlas.deps.store.upsertDoc("acquisition_suppressions", createHash("sha256").update(address).digest("hex"), { source: "owner_manual_outreach" });
+    s.lookup.mockImplementation(async ({ query }) => query.includes('"email"') ? [candidate("Stopped Local Business", address, sector(query))] : []);
+    const found = await s.service.step(input()); expect(found.leadIds).toEqual([]); expect(found.exclusions.duplicate).toBe(2);
+    const lead = addSeed(s, { name: "Stopped Local Business", email: address });
+    expect(s.service.seed({ ...input(), leadIds: [lead.id] }).leadIds).toEqual([]);
   });
 
   it("refuses stale/malformed qualifications, unrelated-region seeds and prior-day reuse", () => {

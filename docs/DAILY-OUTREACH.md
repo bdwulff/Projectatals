@@ -1,5 +1,25 @@
 # Daily client research, manual email drafts and separate pricing
 
+## Website and outreach upgrade on 30 October 2026
+
+The new **Manual outreach** queue in Studio prepares a specific initial email and two useful follow-ups for each researched prospect. It is served by the authenticated `/api/manual-outreach` endpoint. The existing daily research program remains the single research scheduler; a second scheduled service has not been added.
+
+Each row shows its dated observation, practical business opportunity, source link, relevant public proof or personalised preview, and any review flags. A personalised preview is included only when a shareable URL is recorded and not expired. New private concepts use Wulff Digital’s public portfolio as proof until their own publication is reviewed. Sign-in-only preview links are never inserted into these manual messages.
+
+On iPhone, review the recipient, source and message, choose **Mark reviewed**, then **Open in email app**. The mailto link carries the recipient, subject, complete text and preview link into the device’s configured email application. The mailbox used to send remains a choice in that application. Copy and `.eml` download remain available as fallbacks. Opening or copying a draft never records it sent.
+
+After sending in the mail application, use **I sent this** to record the manual action. The first follow-up becomes due three days after that recorded send; the second becomes due four days after the first follow-up’s recorded send. Each follow-up needs its own review. **Replied**, **Closed**, **Hold** and **Do not contact** stop the sequence. Only a temporary hold can be resumed. A do-not-contact action also records the existing global recipient suppression so future research does not rediscover it as a new contact.
+
+Review and sent-note updates require both the current row revision and the exact displayed draft hash. Changed text cannot silently inherit an earlier review. Prior manual sent/replied/do-not-contact records and suppression are retained when matching old and new research. A prior contact with a missing sent date is held instead of being offered as a fresh initial email.
+
+The optional owner-provided research import is read from `ATLAS_OUTREACH_SEED_PATH`, or the deployment-only `private-outreach/seed.json` by default. It is bounded, validated and retained in SQLite. It must stay outside the public repository and static website assets. Importing revised evidence invalidates unsent reviews while preserving owner-reported sends and their exact sent text. Imported prospects are identified as reviewed imports; they are not described as autonomous discoveries.
+
+The daily target is twenty genuinely new prospects, not a guaranteed output. Backlogs remain available but do not count again as newly found on later days. Previously reviewed import names and contacts are excluded from fresh discovery. Failed lookups, missing evidence, source checks older than thirty days, expired previews and held contacts produce an explicit shortfall. No emails are sent automatically.
+
+The research planner now keeps council searches within that council’s supported suburbs and restricts Fresha searches to salon and training categories. A named individual council profile can establish identity through its exact matching title and URL slug when the contact excerpt does not repeat the business name. Generic directory indexes, mismatched slugs, shared supplier pages, ambiguous recipients and unrelated services remain excluded. The independent-website search still runs before qualification. Future reports retain exclusion counts so a shortfall can be diagnosed; existing completed reports and their search allowances are not reset.
+
+Scheduling remains configured through the existing authenticated **POST** `/api/discovery-program/settings` route, using its full current settings and `enabled: true`, `target: "no_website"`, `count: 20`, `timeZone: "Australia/Melbourne"`. The worker begins after 7 am Melbourne time. Activation and future runs must be checked on the hosted service; passing local tests alone does not prove a live scheduled run.
+
 > **Deployed and activated — 28 October 2026.** Railway deployment
 > `dc896841-d318-435f-8e18-2d546102fa33` reached **SUCCESS**. The dated live report
 > contains **20 of 20 new Simple demos and sourced introductory drafts** for

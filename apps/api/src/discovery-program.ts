@@ -1,7 +1,7 @@
 import { contentHash, PermissionLevel, requiredLevel, safeDemoWebsite, type AcquisitionRecord, type AcquisitionService, type Atlas } from "@atlas/core";
 import type { Hono } from "hono";
 import type { Runtime } from "./runtime.js";
-import { NoWebsiteResearch, noWebsiteQualificationKey, type NoWebsiteQualification } from "./no-website-research.js";
+import { NoWebsiteResearch, noWebsiteQualificationKey, type NoWebsiteQualification, type NoWebsiteResearchResult } from "./no-website-research.js";
 
 const SETTINGS = "discovery.program.settings", REPORTS = "discovery_program_reports", JOB = "discovery_program";
 const TERMINAL = new Set(["accepted", "submitting", "queued", "uncertain", "simulated", "cancelled"]);
@@ -19,6 +19,7 @@ export interface DiscoveryReport {
   errors: string[]; spokenSummary: string; fixture: boolean;
   requestedCount?: number; emailReadyCount?: number; shortfallCount?: number; searchCount?: number;
   nextStepAt?: string; settingsRevision?: number; reviewPath?: string; spreadsheetPath?: string;
+  exclusions?: NoWebsiteResearchResult["exclusions"];
 }
 export interface DiscoveryRunState { state: "idle" | "queued" | "running" | "completed" | "partial" | "failed" | "skipped" | "already_ran" | "blocked"; detail: string; jobId?: string }
 interface SavedSettings { settings: DiscoverySettings; revision: number }
@@ -255,7 +256,7 @@ export class DiscoveryProgram {
       report.shortfallCount = Math.max(0, saved.settings.count - report.emailReadyCount);
       report.logoCount = report.businesses.filter(row => row.logoIncluded).length;
       report.photoCount = report.businesses.reduce((n, row) => n + row.photoCount, 0);
-      report.searchCount = result.daySearchCount; report.errors = result.errors;
+      report.searchCount = result.daySearchCount; report.errors = result.errors; report.exclusions = { ...result.exclusions };
       report.reviewPath = "/#pipeline"; report.spreadsheetPath = "/api/prospect-pricing/export.xlsx";
       report.nextStepAt = result.nextStepAt;
       report.state = result.state === "running" ? "running" : report.emailReadyCount === saved.settings.count ? "completed" : records.length ? "partial" : "failed";
