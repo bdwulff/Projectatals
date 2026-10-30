@@ -88,7 +88,7 @@ describe("Atlas end-to-end (fictional data)", () => {
     const { atlas } = build();
     const r = await atlas.handleCommand("Atlas, read me today's BoxSafe orders");
     expect(r.outcome).toBe("simulated");
-    expect(r.reply).toMatch(/BoxSafe received \d+ paid orders today/);
+    expect(r.reply).toMatch(/BoxSafe received \d+ paid orders? today/);
     expect(r.reply).toContain("fictional data");
     const b = await atlas.briefing();
     expect(b.dataNotice).toMatch(/FICTIONAL/);

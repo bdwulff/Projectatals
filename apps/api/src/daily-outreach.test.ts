@@ -30,6 +30,7 @@ describe("daily manual client workflow", () => {
     await s.service.seedToday({ leads }); await vi.advanceTimersByTimeAsync(0);
     const report = (await s.service.snapshot()).latestReport!;
     expect(report).toMatchObject({ id: "outreach_2026-10-28", state: "completed", requestedCount: 20, emailReadyCount: 20, shortfallCount: 0, foundCount: 20, preparedCount: 20 });
+    expect(report.exclusions).toEqual({ duplicate: 0, missingEmail: 0, ownWebsite: 0, unverified: 0, nonBusiness: 0 });
     expect(s.lookup).not.toHaveBeenCalled(); expect(send).not.toHaveBeenCalled(); expect(publish).not.toHaveBeenCalled(); expect(notify).not.toHaveBeenCalled();
     const prices = s.rt.prospectPricing.snapshot().rows; expect(prices).toHaveLength(20);
     for (const row of prices) {

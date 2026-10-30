@@ -10,6 +10,7 @@ import { OfficialBusinessEnricher } from "./acquisition-assets.js";
 import { DiscoveryProgram } from "./discovery-program.js";
 import { SiteRebuilds } from "./site-rebuilds.js";
 import { ProspectPricing } from "./prospect-pricing.js";
+import { ManualOutreach } from "./manual-outreach.js";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -35,7 +36,7 @@ export function fixtureWebsiteTable() {
   };
 }
 
-export interface Runtime { atlas: Atlas; acquisition: AcquisitionService; acquisitionMail: AcquisitionMailTransport; mailProviders: SelectableAcquisitionMailTransport; googleMail: GmailAcquisitionMailTransport; ownerUpdates: OwnerUpdates; discoveryProgram: DiscoveryProgram; siteRebuilds: SiteRebuilds; prospectPricing: ProspectPricing; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
+export interface Runtime { atlas: Atlas; acquisition: AcquisitionService; acquisitionMail: AcquisitionMailTransport; mailProviders: SelectableAcquisitionMailTransport; googleMail: GmailAcquisitionMailTransport; ownerUpdates: OwnerUpdates; discoveryProgram: DiscoveryProgram; siteRebuilds: SiteRebuilds; prospectPricing: ProspectPricing; manualOutreach: ManualOutreach; mode: "fake" | "live"; fakes: { mailer: fake.FakeMailer; mailbox: fake.FakeMailbox; telephony: fake.FakeTelephony; push: fake.FakePushNotifier } }
 
 export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   const requestedMode = env.ATLAS_MODE ?? "fake";
@@ -85,5 +86,6 @@ export function buildRuntime(env: NodeJS.ProcessEnv = process.env): Runtime {
   prospectPricing.sync();
   const discoveryProgram = new DiscoveryProgram({ atlas, acquisition, mode: forceFake ? "fake" : "live", env, onPrepared: () => prospectPricing.sync() });
   const siteRebuilds = new SiteRebuilds({ atlas, acquisition, mode: forceFake ? "fake" : "live", notificationPriority: "action_needed" });
-  return { atlas, acquisition, acquisitionMail, mailProviders, googleMail, ownerUpdates, discoveryProgram, siteRebuilds, prospectPricing, mode: forceFake ? "fake" : "live", fakes };
+  const manualOutreach = new ManualOutreach({ atlas, pricing: prospectPricing, discovery: discoveryProgram, mode: forceFake ? "fake" : "live", publicOrigin: env.ATLAS_PUBLIC_ORIGIN, env });
+  return { atlas, acquisition, acquisitionMail, mailProviders, googleMail, ownerUpdates, discoveryProgram, siteRebuilds, prospectPricing, manualOutreach, mode: forceFake ? "fake" : "live", fakes };
 }

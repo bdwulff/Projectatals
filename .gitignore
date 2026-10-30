@@ -8,3 +8,7 @@ data/*.sqlite
 data/*.sqlite-*
 .DS_Store
 coverage/
+
+private-outreach/
+
+concept-previews/

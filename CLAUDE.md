@@ -24,3 +24,9 @@ Atlas is an operational AI executive assistant for Wulff Studio and BoxSafe. Rea
 - Keep fictional data clearly fictional (`fixture: true`, "(fictional)" in names, `.example.test` domains).
 - Report in the four-section format: DELIVERED / NEEDS BRANDON'S DECISION / NEXT ACTION / BUDGET.
 - Australian English. Amounts in AUD. Melbourne time for day boundaries.
+
+## Website design references
+- Read `docs/DESIGN-REFERENCE-LIBRARY.md` before client demo design changes. Brandon’s supplied template references supersede earlier visual directions. Review the complete pending reference set before rebuilding; use only those supplied templates as visual design sources.
+
+## Outreach voice
+- Read `docs/OUTREACH-VOICE.md` before writing or changing Wulff Digital prospect emails. Use Brandon’s warm, confident, flexible sales approach, the exact individual preview URL and factual local-search deliverables.
